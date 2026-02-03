@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { minerService } from '$lib/server/miner';
-import { addStreamer, removeStreamer, setAuthToken, getConfig } from '$lib/server/config';
+import { addStreamer, removeStreamer, getConfig } from '$lib/server/config';
 
 export const GET: RequestHandler = async () => {
 	const status = minerService.getStatus();
@@ -26,13 +26,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		case 'stop':
 			minerService.stop();
 			return json({ success: true, message: 'Miner stopped' });
-
-		case 'setToken':
-			if (typeof value !== 'string' || !value) {
-				return json({ success: false, message: 'Token is required' }, { status: 400 });
-			}
-			setAuthToken(value);
-			return json({ success: true, message: 'Auth token set' });
 
 		case 'addStreamer':
 			if (typeof value !== 'string' || !value) {

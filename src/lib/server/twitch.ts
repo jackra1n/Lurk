@@ -67,28 +67,6 @@ export class TwitchClient {
 		}
 	}
 
-	async validateToken(): Promise<boolean> {
-		if (!this.authToken) {
-			return false;
-		}
-
-		try {
-			const response = await this.postGqlRequest(GQL_OPERATIONS.GetIDFromLogin, {
-				login: 'twitch' // Just a test query
-			});
-
-			if (response.errors && response.errors.length > 0) {
-				console.error('[TwitchClient] Token validation failed:', response.errors);
-				return false;
-			}
-
-			console.log('[TwitchClient] Token validated successfully');
-			return true;
-		} catch {
-			return false;
-		}
-	}
-
 	async getUserId(login: string): Promise<string | null> {
 		if (!this.isAuthenticated()) {
 			console.log('[TwitchClient] Cannot get user ID - not authenticated');

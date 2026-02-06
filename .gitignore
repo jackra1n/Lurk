@@ -24,3 +24,4 @@ vite.config.ts.timestamp-*
 
 config.json
 auth.json
+cookies.json

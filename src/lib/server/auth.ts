@@ -9,6 +9,7 @@ import {
 } from './constants';
 
 const AUTH_PATH = join(process.cwd(), 'auth.json');
+const COOKIES_PATH = join(process.cwd(), 'cookies.json');
 
 export interface DeviceCodeResponse {
 	device_code: string;
@@ -20,7 +21,6 @@ export interface DeviceCodeResponse {
 
 export interface TokenResponse {
 	access_token: string;
-	refresh_token: string;
 	expires_in: number;
 	scope: string[];
 	token_type: string;
@@ -38,16 +38,16 @@ export interface AuthStatus {
 
 interface PersistedAuth {
 	accessToken: string | null;
-	refreshToken: string | null;
 	userId: string | null;
 	username: string | null;
+	deviceId: string | null;
 }
 
 const defaultPersistedAuth: PersistedAuth = {
 	accessToken: null,
-	refreshToken: null,
 	userId: null,
-	username: null
+	username: null,
+	deviceId: null
 };
 
 function loadPersistedAuth(): PersistedAuth {
@@ -67,6 +67,27 @@ function savePersistedAuth(auth: PersistedAuth): void {
 	writeFileSync(AUTH_PATH, JSON.stringify(auth, null, 2), 'utf-8');
 }
 
+function loadPersistedCookies(): string[] {
+	if (!existsSync(COOKIES_PATH)) {
+		return [];
+	}
+
+	try {
+		const raw = readFileSync(COOKIES_PATH, 'utf-8');
+		const parsed = JSON.parse(raw) as unknown;
+		if (!Array.isArray(parsed)) {
+			return [];
+		}
+		return parsed.filter((cookie): cookie is string => typeof cookie === 'string');
+	} catch {
+		return [];
+	}
+}
+
+function savePersistedCookies(cookies: string[]): void {
+	writeFileSync(COOKIES_PATH, JSON.stringify(cookies, null, 2), 'utf-8');
+}
+
 interface PendingAuth {
 	deviceCode: string;
 	userCode: string;
@@ -77,14 +98,23 @@ interface PendingAuth {
 	reject: (error: Error) => void;
 }
 
+interface TokenValidationResult {
+	valid: boolean;
+	status?: number;
+	userId?: string;
+	username?: string;
+}
+
 class TwitchAuth {
 	private pendingAuth: PendingAuth | null = null;
 	private persisted: PersistedAuth;
-	private deviceId: string;
 
 	constructor() {
-		this.deviceId = this.generateDeviceId();
 		this.persisted = loadPersistedAuth();
+		if (!this.persisted.deviceId) {
+			this.persisted.deviceId = this.generateDeviceId();
+			this.save();
+		}
 	}
 
 	private generateDeviceId(): string {
@@ -100,12 +130,60 @@ class TwitchAuth {
 		savePersistedAuth(this.persisted);
 	}
 
+	private getDeviceId(): string {
+		if (!this.persisted.deviceId) {
+			this.persisted.deviceId = this.generateDeviceId();
+			this.save();
+		}
+		return this.persisted.deviceId;
+	}
+
+	private async validateAccessToken(accessToken: string): Promise<TokenValidationResult> {
+		const response = await fetch('https://id.twitch.tv/oauth2/validate', {
+			headers: {
+				Authorization: `OAuth ${accessToken}`
+			}
+		});
+
+		if (!response.ok) {
+			return {
+				valid: false,
+				status: response.status
+			};
+		}
+
+		const data = await response.json();
+		return {
+			valid: true,
+			userId: data.user_id,
+			username: data.login
+		};
+	}
+
+	private saveValidatedUser(userId?: string, username?: string): void {
+		if (!userId) {
+			return;
+		}
+
+		this.persisted.userId = userId;
+		this.persisted.username = username ?? null;
+		this.save();
+	}
+
 	getAuthToken(): string | null {
 		return this.persisted.accessToken;
 	}
 
 	getUserId(): string | null {
 		return this.persisted.userId;
+	}
+
+	getCookies(): string[] {
+		return loadPersistedCookies();
+	}
+
+	setCookies(cookies: string[]): void {
+		savePersistedCookies(cookies.filter((cookie): cookie is string => typeof cookie === 'string'));
 	}
 
 	/**
@@ -124,7 +202,7 @@ class TwitchAuth {
 				'Content-Type': 'application/x-www-form-urlencoded',
 				'Client-Id': CLIENT_ID,
 				'User-Agent': USER_AGENT,
-				'X-Device-Id': this.deviceId
+				'X-Device-Id': this.getDeviceId()
 			},
 			body: new URLSearchParams({
 				client_id: CLIENT_ID,
@@ -180,7 +258,7 @@ class TwitchAuth {
 							'Content-Type': 'application/x-www-form-urlencoded',
 							'Client-Id': CLIENT_ID,
 							'User-Agent': USER_AGENT,
-							'X-Device-Id': this.deviceId
+							'X-Device-Id': this.getDeviceId()
 						},
 						body: new URLSearchParams({
 							client_id: CLIENT_ID,
@@ -207,7 +285,6 @@ class TwitchAuth {
 					console.log('[Auth] Got access token!');
 
 					this.persisted.accessToken = tokenData.access_token;
-					this.persisted.refreshToken = tokenData.refresh_token || null;
 					this.save();
 
 					await this.fetchAndSaveUserId(tokenData.access_token);
@@ -233,20 +310,10 @@ class TwitchAuth {
 	 */
 	private async fetchAndSaveUserId(accessToken: string): Promise<void> {
 		try {
-			const validateResponse = await fetch('https://id.twitch.tv/oauth2/validate', {
-				headers: {
-					Authorization: `OAuth ${accessToken}`
-				}
-			});
-
-			if (validateResponse.ok) {
-				const data = await validateResponse.json();
-				if (data.user_id) {
-					this.persisted.userId = data.user_id;
-					this.persisted.username = data.login;
-					this.save();
-					console.log(`[Auth] User ID: ${data.user_id}, Username: ${data.login}`);
-				}
+			const validation = await this.validateAccessToken(accessToken);
+			if (validation.valid && validation.userId) {
+				this.saveValidatedUser(validation.userId, validation.username);
+				console.log(`[Auth] User ID: ${validation.userId}, Username: ${validation.username}`);
 			}
 		} catch (error) {
 			console.error('[Auth] Failed to fetch user ID:', error);
@@ -277,23 +344,13 @@ class TwitchAuth {
 		if (!token) return false;
 
 		try {
-			const response = await fetch('https://id.twitch.tv/oauth2/validate', {
-				headers: {
-					Authorization: `OAuth ${token}`
-				}
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				if (data.user_id) {
-					this.persisted.userId = data.user_id;
-					this.persisted.username = data.login;
-					this.save();
-				}
+			const validation = await this.validateAccessToken(token);
+			if (validation.valid) {
+				this.saveValidatedUser(validation.userId, validation.username);
 				return true;
 			}
 
-			console.log('[Auth] Token validation failed:', response.status);
+			console.log('[Auth] Token validation failed:', validation.status);
 			return false;
 		} catch (error) {
 			console.error('[Auth] Token validation error:', error);
@@ -303,8 +360,10 @@ class TwitchAuth {
 
 	logout(): void {
 		this.cancelPendingAuth();
-		this.persisted = { ...defaultPersistedAuth };
+		const previousDeviceId = this.getDeviceId();
+		this.persisted = { ...defaultPersistedAuth, deviceId: previousDeviceId };
 		this.save();
+		savePersistedCookies([]);
 		console.log('[Auth] Logged out');
 	}
 }

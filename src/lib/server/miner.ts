@@ -38,6 +38,22 @@ interface PointsEarnedData {
 	};
 }
 
+enum PubSubTopicType {
+	CommunityPointsUser = 'community-points-user-v1',
+	VideoPlaybackById = 'video-playback-by-id'
+}
+
+enum CommunityPointsMessageType {
+	ClaimAvailable = 'claim-available',
+	PointsEarned = 'points-earned'
+}
+
+enum VideoPlaybackMessageType {
+	StreamUp = 'stream-up',
+	StreamDown = 'stream-down',
+	Viewcount = 'viewcount'
+}
+
 class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
 	private running = false;
@@ -177,7 +193,7 @@ class MinerService {
 		}
 
 		try {
-			await twitchPubSub.listen(`community-points-user-v1.${this.userId}`, true);
+			await twitchPubSub.listen(`${PubSubTopicType.CommunityPointsUser}.${this.userId}`, true);
 			console.log(`[Miner] Subscribed to user-level channel points topic for user ${this.userId}`);
 		} catch (error) {
 			console.error('[Miner] Failed to subscribe to user topic:', error);
@@ -189,7 +205,7 @@ class MinerService {
 		if (!state.channelId) return;
 
 		try {
-			await twitchPubSub.listen(`video-playback-by-id.${state.channelId}`, false);
+			await twitchPubSub.listen(`${PubSubTopicType.VideoPlaybackById}.${state.channelId}`, false);
 			console.log(`[Miner] Subscribed to ${state.name}'s stream status`);
 		} catch (error) {
 			console.error(`[Miner] Failed to subscribe to ${state.name}:`, error);
@@ -201,21 +217,21 @@ class MinerService {
 		const topicType = topicParts[0];
 		const topicId = topicParts[1];
 
-		if (topicType === 'community-points-user-v1') {
+		if (topicType === PubSubTopicType.CommunityPointsUser) {
 			this.handleCommunityPointsMessage(messageType, data);
-		} else if (topicType === 'video-playback-by-id') {
+		} else if (topicType === PubSubTopicType.VideoPlaybackById) {
 			this.handleVideoPlaybackMessage(topicId, messageType, data);
 		}
 	}
 
 	private handleCommunityPointsMessage(messageType: string, data: unknown): void {
-		if (messageType === 'claim-available') {
+		if (messageType === CommunityPointsMessageType.ClaimAvailable) {
 			const claimData = data as { data: ClaimAvailableData };
 			const { channel_id: channelId, id: claimId } = claimData.data.claim;
 
 			console.log(`[Miner] Claim available for channel ${channelId}!`);
 			this.claimBonus(channelId, claimId);
-		} else if (messageType === 'points-earned') {
+		} else if (messageType === CommunityPointsMessageType.PointsEarned) {
 			const pointsData = data as { data: PointsEarnedData };
 			const { balance, point_gain } = pointsData.data;
 
@@ -240,17 +256,17 @@ class MinerService {
 
 		if (!streamer) return;
 
-		if (messageType === 'stream-up') {
+		if (messageType === VideoPlaybackMessageType.StreamUp) {
 			if (!streamer.isLive) {
 				streamer.isLive = true;
 				console.log(`[Miner] ${streamer.name} went LIVE`);
 			}
-		} else if (messageType === 'stream-down') {
+		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 			if (streamer.isLive) {
 				streamer.isLive = false;
 				console.log(`[Miner] ${streamer.name} went OFFLINE`);
 			}
-		} else if (messageType === 'viewcount') {
+		} else if (messageType === VideoPlaybackMessageType.Viewcount) {
 			if (!streamer.isLive) {
 				streamer.isLive = true;
 			}

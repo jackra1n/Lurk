@@ -1,4 +1,3 @@
-import { getAuthToken } from './config';
 import { GQL_URL, CLIENT_ID, GQL_OPERATIONS } from './constants';
 
 export interface TwitchUser {
@@ -19,10 +18,6 @@ interface GqlResponse<T = unknown> {
 
 export class TwitchClient {
 	private authToken: string | null = null;
-
-	constructor() {
-		this.authToken = getAuthToken();
-	}
 
 	setAuthToken(token: string): void {
 		this.authToken = token;

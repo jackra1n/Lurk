@@ -1,4 +1,4 @@
-import { getStreamers, getAuthToken, getUserId } from './config';
+import { getStreamers } from './config';
 import { twitchClient } from './twitch';
 import { twitchPubSub } from './pubsub';
 import { twitchAuth } from './auth';
@@ -55,7 +55,7 @@ class MinerService {
 			return;
 		}
 
-		const authToken = getAuthToken();
+		const authToken = twitchAuth.getAuthToken();
 		if (!authToken) {
 			console.log('[Miner] Cannot start - no auth token configured');
 			return;
@@ -71,7 +71,7 @@ class MinerService {
 			return;
 		}
 
-		this.userId = getUserId();
+		this.userId = twitchAuth.getUserId();
 
 		this.running = true;
 		this.startedAt = new Date();

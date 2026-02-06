@@ -4,14 +4,10 @@ import { join } from 'path';
 const CONFIG_PATH = join(process.cwd(), 'config.json');
 
 export interface MinerConfig {
-	authToken: string | null;
-	userId: string | null;
 	streamers: string[];
 }
 
 const defaultConfig: MinerConfig = {
-	authToken: null,
-	userId: null,
 	streamers: []
 };
 
@@ -37,24 +33,6 @@ let config: MinerConfig = loadConfig();
 
 export function getConfig(): MinerConfig {
 	return config;
-}
-
-export function getAuthToken(): string | null {
-	return config.authToken;
-}
-
-export function setAuthToken(token: string): void {
-	config.authToken = token || null;
-	saveConfig(config);
-}
-
-export function getUserId(): string | null {
-	return config.userId;
-}
-
-export function setUserId(userId: string): void {
-	config.userId = userId || null;
-	saveConfig(config);
 }
 
 export function getStreamers(): string[] {

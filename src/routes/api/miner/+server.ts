@@ -1,16 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { minerService } from '$lib/server/miner';
-import { addStreamer, removeStreamer, getConfig } from '$lib/server/config';
+import { addStreamer, removeStreamer, getStreamers } from '$lib/server/config';
+import { twitchAuth } from '$lib/server/auth';
 
 export const GET: RequestHandler = async () => {
 	const status = minerService.getStatus();
-	const config = getConfig();
 
 	return json({
 		...status,
-		hasAuthToken: !!config.authToken,
-		configuredStreamers: config.streamers
+		hasAuthToken: !!twitchAuth.getAuthToken(),
+		configuredStreamers: getStreamers()
 	});
 };
 

@@ -1,13 +1,14 @@
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
 import {
 	CLIENT_ID,
 	OAUTH_DEVICE_URL,
 	OAUTH_TOKEN_URL,
 	OAUTH_SCOPES,
-	USER_AGENT,
-	GQL_URL,
-	GQL_OPERATIONS
+	USER_AGENT
 } from './constants';
-import { setAuthToken, setUserId, getAuthToken, getUserId } from './config';
+
+const AUTH_PATH = join(process.cwd(), 'auth.json');
 
 export interface DeviceCodeResponse {
 	device_code: string;
@@ -35,6 +36,37 @@ export interface AuthStatus {
 	expiresAt: Date | null;
 }
 
+interface PersistedAuth {
+	accessToken: string | null;
+	refreshToken: string | null;
+	userId: string | null;
+	username: string | null;
+}
+
+const defaultPersistedAuth: PersistedAuth = {
+	accessToken: null,
+	refreshToken: null,
+	userId: null,
+	username: null
+};
+
+function loadPersistedAuth(): PersistedAuth {
+	if (!existsSync(AUTH_PATH)) {
+		return { ...defaultPersistedAuth };
+	}
+
+	try {
+		const raw = readFileSync(AUTH_PATH, 'utf-8');
+		return { ...defaultPersistedAuth, ...JSON.parse(raw) };
+	} catch {
+		return { ...defaultPersistedAuth };
+	}
+}
+
+function savePersistedAuth(auth: PersistedAuth): void {
+	writeFileSync(AUTH_PATH, JSON.stringify(auth, null, 2), 'utf-8');
+}
+
 interface PendingAuth {
 	deviceCode: string;
 	userCode: string;
@@ -47,11 +79,12 @@ interface PendingAuth {
 
 class TwitchAuth {
 	private pendingAuth: PendingAuth | null = null;
-	private username: string | null = null;
+	private persisted: PersistedAuth;
 	private deviceId: string;
 
 	constructor() {
 		this.deviceId = this.generateDeviceId();
+		this.persisted = loadPersistedAuth();
 	}
 
 	private generateDeviceId(): string {
@@ -61,6 +94,18 @@ class TwitchAuth {
 			result += chars.charAt(Math.floor(Math.random() * chars.length));
 		}
 		return result;
+	}
+
+	private save(): void {
+		savePersistedAuth(this.persisted);
+	}
+
+	getAuthToken(): string | null {
+		return this.persisted.accessToken;
+	}
+
+	getUserId(): string | null {
+		return this.persisted.userId;
 	}
 
 	/**
@@ -161,7 +206,9 @@ class TwitchAuth {
 					const tokenData: TokenResponse = await response.json();
 					console.log('[Auth] Got access token!');
 
-					setAuthToken(tokenData.access_token);
+					this.persisted.accessToken = tokenData.access_token;
+					this.persisted.refreshToken = tokenData.refresh_token || null;
+					this.save();
 
 					await this.fetchAndSaveUserId(tokenData.access_token);
 
@@ -186,21 +233,6 @@ class TwitchAuth {
 	 */
 	private async fetchAndSaveUserId(accessToken: string): Promise<void> {
 		try {
-			// Use GQL to get user info
-			const response = await fetch(GQL_URL, {
-				method: 'POST',
-				headers: {
-					Authorization: `OAuth ${accessToken}`,
-					'Client-Id': CLIENT_ID,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					...GQL_OPERATIONS.GetIDFromLogin,
-					variables: { login: '' } // Empty login returns current user? Let's try a different approach
-				})
-			});
-
-			// Alternative: Validate token endpoint returns user info
 			const validateResponse = await fetch('https://id.twitch.tv/oauth2/validate', {
 				headers: {
 					Authorization: `OAuth ${accessToken}`
@@ -210,8 +242,9 @@ class TwitchAuth {
 			if (validateResponse.ok) {
 				const data = await validateResponse.json();
 				if (data.user_id) {
-					setUserId(data.user_id);
-					this.username = data.login;
+					this.persisted.userId = data.user_id;
+					this.persisted.username = data.login;
+					this.save();
 					console.log(`[Auth] User ID: ${data.user_id}, Username: ${data.login}`);
 				}
 			}
@@ -228,13 +261,10 @@ class TwitchAuth {
 	}
 
 	getStatus(): AuthStatus {
-		const token = getAuthToken();
-		const userId = getUserId();
-
 		return {
-			authenticated: !!token,
-			userId,
-			username: this.username,
+			authenticated: !!this.persisted.accessToken,
+			userId: this.persisted.userId,
+			username: this.persisted.username,
 			pendingLogin: this.pendingAuth !== null,
 			userCode: this.pendingAuth?.userCode || null,
 			verificationUri: this.pendingAuth ? 'https://www.twitch.tv/activate' : null,
@@ -243,7 +273,7 @@ class TwitchAuth {
 	}
 
 	async validateToken(): Promise<boolean> {
-		const token = getAuthToken();
+		const token = this.persisted.accessToken;
 		if (!token) return false;
 
 		try {
@@ -256,8 +286,9 @@ class TwitchAuth {
 			if (response.ok) {
 				const data = await response.json();
 				if (data.user_id) {
-					setUserId(data.user_id);
-					this.username = data.login;
+					this.persisted.userId = data.user_id;
+					this.persisted.username = data.login;
+					this.save();
 				}
 				return true;
 			}
@@ -272,9 +303,8 @@ class TwitchAuth {
 
 	logout(): void {
 		this.cancelPendingAuth();
-		setAuthToken('');
-		setUserId('');
-		this.username = null;
+		this.persisted = { ...defaultPersistedAuth };
+		this.save();
 		console.log('[Auth] Logged out');
 	}
 }

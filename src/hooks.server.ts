@@ -11,7 +11,18 @@ async function initializeMiner(): Promise<void> {
 
 	logger.info('Initializing Twitch Points Miner...');
 
-	await minerService.start();
+	const result = await minerService.start();
+	if (result.success) {
+		logger.info({ startup: result.reason }, 'Miner initialization completed');
+		return;
+	}
+
+	if (result.reason === 'missing_token' || result.reason === 'invalid_token') {
+		logger.info({ startup: 'auth_required', reason: result.reason }, 'Miner initialization skipped');
+		return;
+	}
+
+	logger.warn({ startup: 'error', reason: result.reason }, 'Miner initialization failed');
 }
 
 initializeMiner().catch((err) => {

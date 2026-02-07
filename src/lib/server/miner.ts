@@ -27,6 +27,20 @@ export interface MinerStatus {
 	userId: string | null;
 }
 
+export type MinerStartReason =
+	| 'started'
+	| 'already_running'
+	| 'missing_token'
+	| 'invalid_token'
+	| 'pubsub_connect_failed'
+	| 'start_failed';
+
+export interface MinerStartResult {
+	success: boolean;
+	reason: MinerStartReason;
+	message: string;
+}
+
 interface ClaimAvailableData {
 	claim: {
 		id: string;
@@ -70,19 +84,45 @@ class MinerService {
 	private lastTick: Date | null = null;
 	private streamerStates: Map<string, StreamerState> = new Map();
 	private userId: string | null = null;
+	private lastStartResult: MinerStartResult | null = null;
 
 	private readonly TICK_INTERVAL = 60_000; // 60 seconds (less frequent since PubSub handles real-time events)
 
-	async start(): Promise<void> {
+	private setStartResult(result: MinerStartResult): MinerStartResult {
+		this.lastStartResult = result;
+		return result;
+	}
+
+	private cleanupFailedStart(): void {
+		if (this.interval) {
+			clearInterval(this.interval);
+			this.interval = null;
+		}
+
+		twitchPubSub.disconnect();
+		this.running = false;
+		this.startedAt = null;
+		this.userId = null;
+	}
+
+	async start(): Promise<MinerStartResult> {
 		if (this.running) {
 			logger.info('Already running');
-			return;
+			return this.setStartResult({
+				success: true,
+				reason: 'already_running',
+				message: 'Miner is already running'
+			});
 		}
 
 		const authToken = twitchAuth.getAuthToken();
 		if (!authToken) {
 			logger.warn('Cannot start - no auth token configured');
-			return;
+			return this.setStartResult({
+				success: false,
+				reason: 'missing_token',
+				message: 'Missing Twitch auth token'
+			});
 		}
 
 		twitchClient.setAuthToken(authToken);
@@ -92,7 +132,12 @@ class MinerService {
 		const isValid = await twitchAuth.validateToken();
 		if (!isValid) {
 			logger.warn('Cannot start - invalid auth token');
-			return;
+			twitchAuth.logout();
+			return this.setStartResult({
+				success: false,
+				reason: 'invalid_token',
+				message: 'Invalid Twitch auth token'
+			});
 		}
 
 		this.userId = twitchAuth.getUserId();
@@ -117,32 +162,51 @@ class MinerService {
 			await twitchPubSub.connect();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to connect to PubSub');
-			this.running = false;
-			return;
-		}
-
-		logger.info('Setting up streamers...');
-
-		await this.syncStreamers();
-		await this.subscribeToPointsTopic();
-
-		for (const [, state] of this.streamerStates) {
-			if (state.channelId) {
-				await this.subscribeToStreamer(state);
-			}
-		}
-
-		logger.info('Starting background loop...');
-
-		await this.tick();
-
-		this.interval = setInterval(() => {
-			this.tick().catch((err) => {
-				logger.error({ err }, 'Tick error');
+			this.cleanupFailedStart();
+			return this.setStartResult({
+				success: false,
+				reason: 'pubsub_connect_failed',
+				message: 'Failed to connect to Twitch PubSub'
 			});
-		}, this.TICK_INTERVAL);
+		}
+
+		try {
+			logger.info('Setting up streamers...');
+
+			await this.syncStreamers();
+			await this.subscribeToPointsTopic();
+
+			for (const [, state] of this.streamerStates) {
+				if (state.channelId) {
+					await this.subscribeToStreamer(state);
+				}
+			}
+
+			logger.info('Starting background loop...');
+
+			await this.tick();
+
+			this.interval = setInterval(() => {
+				this.tick().catch((err) => {
+					logger.error({ err }, 'Tick error');
+				});
+			}, this.TICK_INTERVAL);
+		} catch (error) {
+			logger.error({ err: error }, 'Failed to finish miner startup');
+			this.cleanupFailedStart();
+			return this.setStartResult({
+				success: false,
+				reason: 'start_failed',
+				message: 'Miner startup failed'
+			});
+		}
 
 		logger.info({ streamerCount: this.streamerStates.size }, 'Started monitoring streamers');
+		return this.setStartResult({
+			success: true,
+			reason: 'started',
+			message: 'Miner started'
+		});
 	}
 
 	stop(): void {
@@ -159,6 +223,8 @@ class MinerService {
 		twitchPubSub.disconnect();
 
 		this.running = false;
+		this.startedAt = null;
+		this.userId = null;
 		logger.info('Stopped');
 	}
 
@@ -368,6 +434,10 @@ class MinerService {
 
 	isRunning(): boolean {
 		return this.running;
+	}
+
+	getLastStartResult(): MinerStartResult | null {
+		return this.lastStartResult;
 	}
 }
 

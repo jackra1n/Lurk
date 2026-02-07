@@ -1,5 +1,8 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { getLogger } from './src/lib/server/logger';
+
+const logger = getLogger('VitePlugin');
 
 export default defineConfig({
   plugins: [
@@ -8,10 +11,7 @@ export default defineConfig({
       name: "lurk-startup",
       configureServer(server) {
         server.ssrLoadModule("/src/hooks.server.ts").catch((err) => {
-          console.error(
-            "[Vite Plugin] Failed to trigger backend initialization:",
-            err,
-          );
+          logger.error({ err }, "Failed to trigger backend initialization");
         });
       },
     },

@@ -1,6 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { twitchAuth } from '$lib/server/auth';
+import { getLogger } from '$lib/server/logger';
+
+const logger = getLogger('AuthAPI');
 
 export const GET: RequestHandler = async () => {
 	const status = twitchAuth.getStatus();
@@ -18,7 +21,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 				// Start polling in the background
 				twitchAuth.pollForToken(deviceCode).catch((error) => {
-					console.error('[Auth API] Login failed:', error.message);
+					logger.error({ err: error }, 'Login failed');
 				});
 
 				return json({

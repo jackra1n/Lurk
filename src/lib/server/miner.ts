@@ -2,6 +2,9 @@ import { getStreamers } from './config';
 import { twitchClient } from './twitch';
 import { twitchPubSub } from './pubsub';
 import { twitchAuth } from './auth';
+import { getLogger } from './logger';
+
+const logger = getLogger('Miner');
 
 export interface StreamerState {
 	name: string;
@@ -72,13 +75,13 @@ class MinerService {
 
 	async start(): Promise<void> {
 		if (this.running) {
-			console.log('[Miner] Already running');
+			logger.info('Already running');
 			return;
 		}
 
 		const authToken = twitchAuth.getAuthToken();
 		if (!authToken) {
-			console.log('[Miner] Cannot start - no auth token configured');
+			logger.warn('Cannot start - no auth token configured');
 			return;
 		}
 
@@ -88,7 +91,7 @@ class MinerService {
 		// Validate token and get user ID
 		const isValid = await twitchAuth.validateToken();
 		if (!isValid) {
-			console.log('[Miner] Cannot start - invalid auth token');
+			logger.warn('Cannot start - invalid auth token');
 			return;
 		}
 
@@ -103,22 +106,22 @@ class MinerService {
 		});
 
 		twitchPubSub.onConnected(() => {
-			console.log('[Miner] PubSub connected');
+			logger.info('PubSub connected');
 		});
 
 		twitchPubSub.onDisconnected(() => {
-			console.log('[Miner] PubSub disconnected');
+			logger.info('PubSub disconnected');
 		});
 
 		try {
 			await twitchPubSub.connect();
 		} catch (error) {
-			console.error('[Miner] Failed to connect to PubSub:', error);
+			logger.error({ err: error }, 'Failed to connect to PubSub');
 			this.running = false;
 			return;
 		}
 
-		console.log('[Miner] Setting up streamers...');
+		logger.info('Setting up streamers...');
 
 		await this.syncStreamers();
 		await this.subscribeToPointsTopic();
@@ -129,22 +132,22 @@ class MinerService {
 			}
 		}
 
-		console.log('[Miner] Starting background loop...');
+		logger.info('Starting background loop...');
 
 		await this.tick();
 
 		this.interval = setInterval(() => {
 			this.tick().catch((err) => {
-				console.error('[Miner] Tick error:', err);
+				logger.error({ err }, 'Tick error');
 			});
 		}, this.TICK_INTERVAL);
 
-		console.log(`[Miner] Started. Monitoring ${this.streamerStates.size} streamers.`);
+		logger.info({ streamerCount: this.streamerStates.size }, 'Started monitoring streamers');
 	}
 
 	stop(): void {
 		if (!this.running) {
-			console.log('[Miner] Not running');
+			logger.info('Not running');
 			return;
 		}
 
@@ -156,7 +159,7 @@ class MinerService {
 		twitchPubSub.disconnect();
 
 		this.running = false;
-		console.log('[Miner] Stopped');
+		logger.info('Stopped');
 	}
 
 	private async syncStreamers(): Promise<void> {
@@ -180,7 +183,7 @@ class MinerService {
 				});
 
 				if (!channelId) {
-					console.error(`[Miner] Could not get channel ID for ${name}`);
+					logger.warn({ streamer: name }, 'Could not get channel ID');
 				}
 			}
 		}
@@ -195,17 +198,17 @@ class MinerService {
 
 	private async subscribeToPointsTopic(): Promise<void> {
 		if (!this.userId) {
-			console.log('[Miner] No user ID available - skipping user-level PubSub topic');
-			console.log('[Miner] Claim bonuses will be detected via periodic channel points context checks');
+			logger.warn('No user ID available - skipping user-level PubSub topic');
+			logger.info('Claim bonuses will be detected via periodic channel points context checks');
 			return;
 		}
 
 		try {
 			await twitchPubSub.listen(`${PubSubTopicType.CommunityPointsUser}.${this.userId}`, true);
-			console.log(`[Miner] Subscribed to user-level channel points topic for user ${this.userId}`);
+			logger.info({ userId: this.userId }, 'Subscribed to user-level channel points topic');
 		} catch (error) {
-			console.error('[Miner] Failed to subscribe to user topic:', error);
-			console.log('[Miner] Claim bonuses will be detected via periodic channel points context checks');
+			logger.error({ err: error }, 'Failed to subscribe to user topic');
+			logger.warn('Claim bonuses will be detected via periodic channel points context checks');
 		}
 	}
 
@@ -214,9 +217,9 @@ class MinerService {
 
 		try {
 			await twitchPubSub.listen(`${PubSubTopicType.VideoPlaybackById}.${state.channelId}`, false);
-			console.log(`[Miner] Subscribed to ${state.name}'s stream status`);
+			logger.info({ streamer: state.name }, 'Subscribed to stream status');
 		} catch (error) {
-			console.error(`[Miner] Failed to subscribe to ${state.name}:`, error);
+			logger.error({ err: error, streamer: state.name }, 'Failed to subscribe to streamer topic');
 		}
 	}
 
@@ -243,15 +246,16 @@ class MinerService {
 			const claimData = data as { data: ClaimAvailableData };
 			const { channel_id: channelId, id: claimId } = claimData.data.claim;
 
-			console.log(`[Miner] Claim available for channel ${channelId}!`);
+			logger.info({ channelId }, 'Claim available');
 			this.claimBonus(channelId, claimId);
 		} else if (messageType === CommunityPointsMessageType.PointsEarned) {
 			const pointsData = data as { data: PointsEarnedData };
 			const { balance, point_gain } = pointsData.data;
 			const channelId = pointsData.data.channel_id ?? balance.channel_id;
 
-			console.log(
-				`[Miner] +${point_gain.total_points} points (${point_gain.reason_code}), Balance: ${balance.balance}`
+			logger.info(
+				{ channelId, points: point_gain.total_points, reason: point_gain.reason_code, balance: balance.balance },
+				'Points earned'
 			);
 
 			const streamer = channelId ? this.findStreamerByChannelId(channelId) : undefined;
@@ -273,13 +277,13 @@ class MinerService {
 			streamer.streamUpAt = new Date();
 			if (!streamer.isLive) {
 				streamer.isLive = true;
-				console.log(`[Miner] ${streamer.name} went LIVE`);
+				logger.info({ streamer: streamer.name }, 'Streamer went LIVE');
 			}
 		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 			if (streamer.isLive) {
 				streamer.isLive = false;
 				streamer.streamDownAt = new Date();
-				console.log(`[Miner] ${streamer.name} went OFFLINE`);
+				logger.info({ streamer: streamer.name }, 'Streamer went OFFLINE');
 			}
 		} else if (messageType === VideoPlaybackMessageType.Viewcount) {
 			if (!streamer.isLive) {
@@ -293,10 +297,10 @@ class MinerService {
 		try {
 			const success = await twitchClient.claimBonus(channelId, claimId);
 			if (success) {
-				console.log(`[Miner] Successfully claimed bonus for channel ${channelId}`);
+				logger.info({ channelId }, 'Successfully claimed bonus');
 			}
 		} catch (error) {
-			console.error(`[Miner] Failed to claim bonus:`, error);
+			logger.error({ err: error, channelId }, 'Failed to claim bonus');
 		}
 	}
 
@@ -304,7 +308,7 @@ class MinerService {
 		this.tickCount++;
 		this.lastTick = new Date();
 
-		console.log(`[Miner] Tick #${this.tickCount} at ${this.lastTick.toISOString()}`);
+		logger.debug({ tick: this.tickCount, at: this.lastTick.toISOString() }, 'Tick');
 
 		await this.syncStreamers();
 
@@ -317,7 +321,7 @@ class MinerService {
 		state.lastChecked = new Date();
 
 		if (!state.channelId) {
-			console.log(`[Miner] Skipping ${state.name} - no channel ID`);
+			logger.debug({ streamer: state.name }, 'Skipping streamer without channel ID');
 			return;
 		}
 
@@ -327,10 +331,10 @@ class MinerService {
 
 		if (isLive && !wasLive) {
 			state.streamUpAt = new Date();
-			console.log(`[Miner] ${state.name} went LIVE (detected via API)`);
+			logger.info({ streamer: state.name }, 'Streamer went LIVE (detected via API)');
 		} else if (!isLive && wasLive) {
 			state.streamDownAt = new Date();
-			console.log(`[Miner] ${state.name} went OFFLINE (detected via API)`);
+			logger.info({ streamer: state.name }, 'Streamer went OFFLINE (detected via API)');
 		}
 
 		// Check for available bonus claims (backup if PubSub misses it)
@@ -343,7 +347,7 @@ class MinerService {
 				state.channelPoints = context.balance;
 
 				if (context.availableClaimId && state.channelId) {
-					console.log(`[Miner] Found available claim for ${state.name} via API check`);
+					logger.info({ streamer: state.name }, 'Found available claim via API check');
 					await this.claimBonus(state.channelId, context.availableClaimId);
 				}
 			}

@@ -1,6 +1,9 @@
 import { PUBSUB_URL, type PubSubMessage } from './constants';
+import { getLogger } from './logger';
 
 export type MessageHandler = (topic: string, messageType: string, data: unknown) => void;
+
+const logger = getLogger('PubSub');
 
 interface PendingListen {
 	topic: string;
@@ -67,12 +70,12 @@ export class TwitchPubSub {
 			}
 
 			this.forcedClose = false;
-			console.log('[PubSub] Connecting to', PUBSUB_URL);
+			logger.info({ url: PUBSUB_URL }, 'Connecting');
 
 			this.ws = new WebSocket(PUBSUB_URL);
 
 			this.ws.onopen = () => {
-				console.log('[PubSub] Connected');
+				logger.info('Connected');
 				this.isConnected = true;
 				this.isReconnecting = false;
 				this.lastPong = Date.now();
@@ -86,14 +89,14 @@ export class TwitchPubSub {
 			};
 
 			this.ws.onerror = (error) => {
-				console.error('[PubSub] WebSocket error:', error);
+				logger.error({ err: error }, 'WebSocket error');
 				if (!this.isConnected) {
 					reject(new Error('Failed to connect'));
 				}
 			};
 
 			this.ws.onclose = () => {
-				console.log('[PubSub] Connection closed');
+				logger.info('Connection closed');
 				this.isConnected = false;
 				this.stopPingLoop();
 				this.onDisconnectedHandler?.();
@@ -109,7 +112,7 @@ export class TwitchPubSub {
 	 * Disconnect from PubSub
 	 */
 	disconnect(): void {
-		console.log('[PubSub] Disconnecting');
+		logger.info('Disconnecting');
 		this.forcedClose = true;
 		this.stopPingLoop();
 
@@ -137,7 +140,7 @@ export class TwitchPubSub {
 		}
 
 		if (this.topics.includes(topic)) {
-			console.log(`[PubSub] Already listening to ${topic}`);
+			logger.debug({ topic }, 'Already listening to topic');
 			return;
 		}
 
@@ -194,7 +197,7 @@ export class TwitchPubSub {
 
 			const pongAge = (Date.now() - this.lastPong) / 1000 / 60;
 			if (pongAge > 5 && this.lastPong > 0) {
-				console.log(`[PubSub] No PONG received in ${pongAge.toFixed(1)} minutes, reconnecting`);
+				logger.warn({ pongAgeMinutes: Number(pongAge.toFixed(1)) }, 'No PONG received, reconnecting');
 				this.handleReconnect();
 				return;
 			}
@@ -216,7 +219,7 @@ export class TwitchPubSub {
 	private handleMessage(data: string): void {
 		try {
 			const message: PubSubMessage = JSON.parse(data);
-			console.log('[PubSub] Received:', message.type);
+			logger.debug({ messageType: message.type }, 'Received message');
 
 			switch (message.type) {
 				case 'PONG':
@@ -232,15 +235,15 @@ export class TwitchPubSub {
 					break;
 
 				case 'RECONNECT':
-					console.log('[PubSub] Server requested reconnect');
+					logger.warn('Server requested reconnect');
 					this.handleReconnect();
 					break;
 
 				default:
-					console.log('[PubSub] Unknown message type:', message);
+					logger.debug({ message }, 'Unknown message type');
 			}
 		} catch (error) {
-			console.error('[PubSub] Failed to parse message:', error);
+			logger.error({ err: error }, 'Failed to parse message');
 		}
 	}
 
@@ -257,10 +260,10 @@ export class TwitchPubSub {
 		this.pendingListens.delete(nonce);
 
 		if (message.error && message.error.length > 0) {
-			console.error(`[PubSub] Listen error for ${pending.topic}: ${message.error}`);
+			logger.error({ topic: pending.topic, error: message.error }, 'Listen error');
 			pending.reject(new Error(message.error));
 		} else {
-			console.log(`[PubSub] Successfully subscribed to ${pending.topic}`);
+			logger.info({ topic: pending.topic }, 'Successfully subscribed to topic');
 			this.topics.push(pending.topic);
 			pending.resolve();
 		}
@@ -278,11 +281,11 @@ export class TwitchPubSub {
 			const innerMessage = JSON.parse(messageStr);
 			const messageType = innerMessage.type;
 
-			console.log(`[PubSub] Message on ${topic}: ${messageType}`);
+			logger.debug({ topic, messageType }, 'Topic message');
 
 			this.onMessageHandler?.(topic, messageType, innerMessage);
 		} catch (error) {
-			console.error('[PubSub] Failed to parse inner message:', error);
+			logger.error({ err: error, topic }, 'Failed to parse inner message');
 		}
 	}
 
@@ -304,7 +307,7 @@ export class TwitchPubSub {
 		if (this.forcedClose) return;
 
 		const delay = 30000 + Math.random() * 30000; // 30-60 seconds
-		console.log(`[PubSub] Reconnecting in ${(delay / 1000).toFixed(0)} seconds...`);
+		logger.warn({ delaySeconds: Math.round(delay / 1000) }, 'Reconnecting soon');
 
 		this.reconnectTimeout = setTimeout(async () => {
 			try {
@@ -319,11 +322,11 @@ export class TwitchPubSub {
 					try {
 						await this.listen(topic, requiresAuth);
 					} catch (error) {
-						console.error(`[PubSub] Failed to re-subscribe to ${topic}:`, error);
+						logger.error({ err: error, topic }, 'Failed to re-subscribe to topic');
 					}
 				}
 			} catch (error) {
-				console.error('[PubSub] Reconnection failed:', error);
+				logger.error({ err: error }, 'Reconnection failed');
 				this.scheduleReconnect();
 			}
 		}, delay);
@@ -334,7 +337,7 @@ export class TwitchPubSub {
 	 */
 	private send(message: object): void {
 		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-			console.error('[PubSub] Cannot send - not connected');
+			logger.error('Cannot send - not connected');
 			return;
 		}
 

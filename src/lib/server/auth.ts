@@ -7,9 +7,11 @@ import {
 	OAUTH_SCOPES,
 	USER_AGENT
 } from './constants';
+import { getLogger } from './logger';
 
 const AUTH_PATH = join(process.cwd(), 'auth.json');
 const COOKIES_PATH = join(process.cwd(), 'cookies.json');
+const logger = getLogger('Auth');
 
 export interface DeviceCodeResponse {
 	device_code: string;
@@ -193,7 +195,7 @@ class TwitchAuth {
 	async startDeviceFlow(): Promise<DeviceCodeResponse> {
 		this.cancelPendingAuth();
 
-		console.log('[Auth] Starting device authorization flow...');
+		logger.info('Starting device authorization flow');
 
 		const response = await fetch(OAUTH_DEVICE_URL, {
 			method: 'POST',
@@ -212,13 +214,12 @@ class TwitchAuth {
 
 		if (!response.ok) {
 			const text = await response.text();
-			console.error('[Auth] Device flow request failed:', response.status, text);
+			logger.error({ status: response.status, body: text }, 'Device flow request failed');
 			throw new Error(`Device flow request failed: ${response.status}`);
 		}
 
 		const data: DeviceCodeResponse = await response.json();
-		console.log('[Auth] Got device code, user should visit:', data.verification_uri);
-		console.log('[Auth] User code:', data.user_code);
+		logger.info({ verificationUri: data.verification_uri, userCode: data.user_code }, 'Device code received');
 
 		return data;
 	}
@@ -275,14 +276,14 @@ class TwitchAuth {
 
 					if (!response.ok) {
 						const text = await response.text();
-						console.error('[Auth] Token request failed:', response.status, text);
+						logger.error({ status: response.status, body: text }, 'Token request failed');
 						this.cancelPendingAuth();
 						reject(new Error(`Token request failed: ${response.status}`));
 						return;
 					}
 
 					const tokenData: TokenResponse = await response.json();
-					console.log('[Auth] Got access token!');
+					logger.info('Got access token');
 
 					this.persisted.accessToken = tokenData.access_token;
 					this.save();
@@ -292,7 +293,7 @@ class TwitchAuth {
 					this.cancelPendingAuth();
 					resolve(tokenData.access_token);
 				} catch (error) {
-					console.error('[Auth] Polling error:', error);
+					logger.error({ err: error }, 'Polling error');
 					// Continue polling on network errors
 					if (this.pendingAuth) {
 						this.pendingAuth.pollingTimer = setTimeout(poll, this.pendingAuth.interval * 1000);
@@ -313,10 +314,10 @@ class TwitchAuth {
 			const validation = await this.validateAccessToken(accessToken);
 			if (validation.valid && validation.userId) {
 				this.saveValidatedUser(validation.userId, validation.username);
-				console.log(`[Auth] User ID: ${validation.userId}, Username: ${validation.username}`);
+				logger.info({ userId: validation.userId, username: validation.username }, 'Validated and saved user');
 			}
 		} catch (error) {
-			console.error('[Auth] Failed to fetch user ID:', error);
+			logger.error({ err: error }, 'Failed to fetch user ID');
 		}
 	}
 
@@ -350,10 +351,10 @@ class TwitchAuth {
 				return true;
 			}
 
-			console.log('[Auth] Token validation failed:', validation.status);
+			logger.warn({ status: validation.status }, 'Token validation failed');
 			return false;
 		} catch (error) {
-			console.error('[Auth] Token validation error:', error);
+			logger.error({ err: error }, 'Token validation error');
 			return false;
 		}
 	}
@@ -364,7 +365,7 @@ class TwitchAuth {
 		this.persisted = { ...defaultPersistedAuth, deviceId: previousDeviceId };
 		this.save();
 		savePersistedCookies([]);
-		console.log('[Auth] Logged out');
+		logger.info('Logged out');
 	}
 }
 

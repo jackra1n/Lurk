@@ -1,4 +1,7 @@
 import { GQL_URL, CLIENT_ID, GQL_OPERATIONS } from './constants';
+import { getLogger } from './logger';
+
+const logger = getLogger('TwitchClient');
 
 export interface TwitchUser {
 	id: string;
@@ -56,20 +59,20 @@ export class TwitchClient {
 			});
 
 			if (!response.ok) {
-				console.error(`[TwitchClient] GQL request failed: ${response.status} ${response.statusText}`);
+				logger.error({ status: response.status, statusText: response.statusText }, 'GQL request failed');
 				return { errors: [{ message: `HTTP ${response.status}` }] };
 			}
 
 			return await response.json();
 		} catch (error) {
-			console.error(`[TwitchClient] GQL request error:`, error);
+			logger.error({ err: error }, 'GQL request error');
 			return { errors: [{ message: String(error) }] };
 		}
 	}
 
 	async getUserId(login: string): Promise<string | null> {
 		if (!this.isAuthenticated()) {
-			console.log('[TwitchClient] Cannot get user ID - not authenticated');
+			logger.warn('Cannot get user ID - not authenticated');
 			return null;
 		}
 
@@ -79,17 +82,17 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			console.error(`[TwitchClient] Failed to get user ID for ${login}:`, response.errors);
+			logger.error({ login, errors: response.errors }, 'Failed to get user ID');
 			return null;
 		}
 
 		const userId = response.data?.user?.id;
 		if (!userId) {
-			console.log(`[TwitchClient] User not found: ${login}`);
+			logger.info({ login }, 'User not found');
 			return null;
 		}
 
-		console.log(`[TwitchClient] Got user ID for ${login}: ${userId}`);
+		logger.debug({ login, userId }, 'Got user ID');
 		return userId;
 	}
 
@@ -130,7 +133,7 @@ export class TwitchClient {
 		);
 
 		if (response.errors || !response.data?.community?.channel) {
-			console.error(`[TwitchClient] Failed to get channel points context for ${channelLogin}`);
+			logger.error({ channelLogin }, 'Failed to get channel points context');
 			return null;
 		}
 
@@ -158,7 +161,7 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			console.error(`[TwitchClient] Failed to check live status for channel ${channelId}`);
+			logger.error({ channelId }, 'Failed to check live status');
 			return false;
 		}
 
@@ -176,11 +179,11 @@ export class TwitchClient {
 
 	async claimBonus(channelId: string, claimId: string): Promise<boolean> {
 		if (!this.isAuthenticated()) {
-			console.log('[TwitchClient] Cannot claim bonus - not authenticated');
+			logger.warn('Cannot claim bonus - not authenticated');
 			return false;
 		}
 
-		console.log(`[TwitchClient] Claiming bonus for channel ${channelId}, claim ${claimId}`);
+		logger.info({ channelId, claimId }, 'Claiming bonus');
 
 		const response = await this.postGqlRequest(GQL_OPERATIONS.ClaimCommunityPoints, {
 			input: {
@@ -190,11 +193,11 @@ export class TwitchClient {
 		});
 
 		if (response.errors) {
-			console.error(`[TwitchClient] Failed to claim bonus:`, response.errors);
+			logger.error({ channelId, claimId, errors: response.errors }, 'Failed to claim bonus');
 			return false;
 		}
 
-		console.log(`[TwitchClient] Successfully claimed bonus for channel ${channelId}`);
+		logger.info({ channelId }, 'Successfully claimed bonus');
 		return true;
 	}
 }

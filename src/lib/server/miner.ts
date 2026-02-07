@@ -9,6 +9,9 @@ export interface StreamerState {
 	isLive: boolean;
 	lastChecked: Date | null;
 	channelPoints: number;
+	startingPoints: number | null;
+	streamUpAt: Date | null;
+	streamDownAt: Date | null;
 }
 
 export interface MinerStatus {
@@ -29,8 +32,10 @@ interface ClaimAvailableData {
 }
 
 interface PointsEarnedData {
+	channel_id: string;
 	balance: {
 		balance: number;
+		channel_id: string;
 	};
 	point_gain: {
 		total_points: number;
@@ -168,7 +173,10 @@ class MinerService {
 					channelId,
 					isLive: false,
 					lastChecked: null,
-					channelPoints: 0
+					channelPoints: 0,
+					startingPoints: null,
+					streamUpAt: null,
+					streamDownAt: null
 				});
 
 				if (!channelId) {
@@ -224,6 +232,12 @@ class MinerService {
 		}
 	}
 
+	private findStreamerByChannelId(channelId: string): StreamerState | undefined {
+		for (const state of this.streamerStates.values()) {
+			if (state.channelId === channelId) return state;
+		}
+	}
+
 	private handleCommunityPointsMessage(messageType: string, data: unknown): void {
 		if (messageType === CommunityPointsMessageType.ClaimAvailable) {
 			const claimData = data as { data: ClaimAvailableData };
@@ -234,10 +248,16 @@ class MinerService {
 		} else if (messageType === CommunityPointsMessageType.PointsEarned) {
 			const pointsData = data as { data: PointsEarnedData };
 			const { balance, point_gain } = pointsData.data;
+			const channelId = pointsData.data.channel_id ?? balance.channel_id;
 
 			console.log(
 				`[Miner] +${point_gain.total_points} points (${point_gain.reason_code}), Balance: ${balance.balance}`
 			);
+
+			const streamer = channelId ? this.findStreamerByChannelId(channelId) : undefined;
+			if (streamer) {
+				streamer.channelPoints = balance.balance;
+			}
 		}
 	}
 
@@ -246,17 +266,11 @@ class MinerService {
 		messageType: string,
 		_data: unknown
 	): void {
-		let streamer: StreamerState | undefined;
-		for (const state of this.streamerStates.values()) {
-			if (state.channelId === channelId) {
-				streamer = state;
-				break;
-			}
-		}
-
+		const streamer = this.findStreamerByChannelId(channelId);
 		if (!streamer) return;
 
 		if (messageType === VideoPlaybackMessageType.StreamUp) {
+			streamer.streamUpAt = new Date();
 			if (!streamer.isLive) {
 				streamer.isLive = true;
 				console.log(`[Miner] ${streamer.name} went LIVE`);
@@ -264,11 +278,13 @@ class MinerService {
 		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 			if (streamer.isLive) {
 				streamer.isLive = false;
+				streamer.streamDownAt = new Date();
 				console.log(`[Miner] ${streamer.name} went OFFLINE`);
 			}
 		} else if (messageType === VideoPlaybackMessageType.Viewcount) {
 			if (!streamer.isLive) {
 				streamer.isLive = true;
+				streamer.streamUpAt = new Date();
 			}
 		}
 	}
@@ -310,8 +326,10 @@ class MinerService {
 		state.isLive = isLive;
 
 		if (isLive && !wasLive) {
+			state.streamUpAt = new Date();
 			console.log(`[Miner] ${state.name} went LIVE (detected via API)`);
 		} else if (!isLive && wasLive) {
+			state.streamDownAt = new Date();
 			console.log(`[Miner] ${state.name} went OFFLINE (detected via API)`);
 		}
 
@@ -319,6 +337,9 @@ class MinerService {
 		if (isLive) {
 			const context = await twitchClient.getChannelPointsContext(state.name);
 			if (context) {
+				if (state.startingPoints === null) {
+					state.startingPoints = context.balance;
+				}
 				state.channelPoints = context.balance;
 
 				if (context.availableClaimId && state.channelId) {

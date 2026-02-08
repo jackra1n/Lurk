@@ -14,3 +14,8 @@ Server logs use structured logging with colored terminal output and rotating fil
 - Rotation policy is daily with the latest 14 files retained.
 - Default log level is `debug` in development and `info` in production.
 - Override level with `LOG_LEVEL` (`trace`, `debug`, `info`, `warn`, `error`, `fatal`).
+
+
+## Notes
+
+- Twitch APIs can change; this project remains best-effort.

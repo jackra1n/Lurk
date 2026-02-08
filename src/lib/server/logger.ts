@@ -17,23 +17,30 @@ const level = LEVELS.has(envLevel ?? '')
 		? 'info'
 		: 'debug';
 
-const prettyStream = pretty({
-	colorize: true,
-	levelFirst: true,
-	translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
-	ignore: 'pid,hostname',
-	singleLine: true
-});
-
-const fileStream = createStream(LOG_FILE, {
+const rotatingFileStream = createStream(LOG_FILE, {
 	interval: '1d',
 	maxFiles: 14,
 	path: LOG_DIR
 });
 
-fileStream.on('error', (error) => {
+rotatingFileStream.on('error', (error) => {
 	const message = error instanceof Error ? error.message : String(error);
 	process.stderr.write(`[Logger] File stream error: ${message}\n`);
+});
+
+const consolePrettyStream = pretty({
+	colorize: true,
+	translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
+	ignore: 'pid,hostname',
+	singleLine: true,
+});
+
+const filePrettyStream = pretty({
+	colorize: false,
+	translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
+	ignore: 'pid,hostname',
+	singleLine: true,
+	destination: rotatingFileStream,
 });
 
 export const log = pino(
@@ -57,7 +64,10 @@ export const log = pino(
 			censor: '[REDACTED]'
 		}
 	},
-	pino.multistream([{ stream: prettyStream }, { stream: fileStream }])
+	pino.multistream([
+		{ stream: consolePrettyStream, level: 'info' },
+		{ stream: filePrettyStream, level: 'debug' },
+	])
 );
 
 export const getLogger = (scope: string) => log.child({ scope });

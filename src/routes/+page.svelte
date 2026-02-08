@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import Moon from '@lucide/svelte/icons/moon';
+	import Sun from '@lucide/svelte/icons/sun';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '$lib/components/ui/card';
@@ -19,6 +22,23 @@
 	];
 
 	const quickActions = ['Connect Twitch', 'Start Miner', 'Add Streamer'];
+	const themeStorageKey = 'theme';
+	let isDark = $state(true);
+
+	onMount(() => {
+		const root = document.documentElement;
+		isDark = root.classList.contains('dark');
+	});
+
+	const toggleTheme = () => {
+		const root = document.documentElement;
+		const nextIsDark = !root.classList.contains('dark');
+
+		root.classList.toggle('dark', nextIsDark);
+		root.style.colorScheme = nextIsDark ? 'dark' : 'light';
+		localStorage.setItem(themeStorageKey, nextIsDark ? 'dark' : 'light');
+		isDark = nextIsDark;
+	};
 </script>
 
 <svelte:head>
@@ -26,13 +46,18 @@
 </svelte:head>
 
 <div class="relative min-h-screen overflow-hidden bg-background text-foreground">
-	<div class="pointer-events-none absolute -top-36 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"></div>
-	<div class="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-chart-2/10 blur-3xl"></div>
-
 	<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-		<header class="flex items-center">
-			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Lurk</h1>
-		</header>
+			<header class="flex items-center justify-between gap-3">
+				<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Lurk</h1>
+				<Button type="button" variant="outline" size="sm" onclick={toggleTheme}>
+					{#if isDark}
+						<Moon class="size-4" />
+					{:else}
+						<Sun class="size-4" />
+					{/if}
+					{isDark ? 'Dark' : 'Light'}
+				</Button>
+			</header>
 
 		<section class="grid gap-4 md:grid-cols-3">
 			{#each statusCards as card}

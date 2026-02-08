@@ -3,6 +3,23 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script>
+			(() => {
+				const storageKey = 'theme';
+				const root = document.documentElement;
+
+				try {
+					const savedTheme = localStorage.getItem(storageKey);
+					const useDark = savedTheme ? savedTheme === 'dark' : true;
+
+					root.classList.toggle('dark', useDark);
+					root.style.colorScheme = useDark ? 'dark' : 'light';
+				} catch {
+					root.classList.add('dark');
+					root.style.colorScheme = 'dark';
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

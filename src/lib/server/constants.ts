@@ -48,6 +48,15 @@ export const GQL_OPERATIONS = {
 				sha256Hash: 'a5f2e34d626a9f4f5c0204f910bab2194948a9502089be558bb6e779a9e1b3d2'
 			}
 		}
+	},
+	PlaybackAccessToken: {
+		operationName: 'PlaybackAccessToken',
+		extensions: {
+			persistedQuery: {
+				version: 1,
+				sha256Hash: '3093517e37e4f4cb48906155bcd894150aef92617939236d2508f3375ab732ce'
+			}
+		}
 	}
 } as const;
 

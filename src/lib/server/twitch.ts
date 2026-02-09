@@ -1,4 +1,4 @@
-import { GQL_URL, CLIENT_ID, GQL_OPERATIONS } from './constants';
+import { GQL_URL, CLIENT_ID, GQL_OPERATIONS, USER_AGENT } from './constants';
 import { getLogger } from './logger';
 
 const logger = getLogger('TwitchClient');
@@ -219,6 +219,184 @@ export class TwitchClient {
 		logger.info({ channelId }, 'Successfully claimed bonus');
 		return true;
 	}
+
+	async getSpadeUrl(channelLogin: string): Promise<string | null> {
+		try {
+			const headers = { 'User-Agent': USER_AGENT };
+
+			const pageResponse = await fetch(`https://www.twitch.tv/${channelLogin.toLowerCase()}`, {
+				headers,
+				redirect: 'follow'
+			});
+			if (!pageResponse.ok) {
+				logger.error({ channelLogin, status: pageResponse.status }, 'Failed to fetch channel page for spade URL');
+				return null;
+			}
+			const pageHtml = await pageResponse.text();
+
+			const settingsMatch = pageHtml.match(
+				/(https:\/\/static\.twitchcdn\.net\/config\/settings.*?js|https:\/\/assets\.twitch\.tv\/config\/settings.*?\.js)/
+			);
+			if (!settingsMatch) {
+				logger.error({ channelLogin }, 'Could not find settings JS URL in channel page');
+				return null;
+			}
+
+			const settingsResponse = await fetch(settingsMatch[1], { headers });
+			if (!settingsResponse.ok) {
+				logger.error({ channelLogin, status: settingsResponse.status }, 'Failed to fetch settings JS');
+				return null;
+			}
+			const settingsJs = await settingsResponse.text();
+
+			const spadeMatch = settingsJs.match(/"spade_url":"(.*?)"/);
+			if (!spadeMatch) {
+				logger.error({ channelLogin }, 'Could not find spade_url in settings JS');
+				return null;
+			}
+
+			logger.debug({ channelLogin, spadeUrl: spadeMatch[1] }, 'Got spade URL');
+			return spadeMatch[1];
+		} catch (error) {
+			logger.error({ err: error, channelLogin }, 'Error fetching spade URL');
+			return null;
+		}
+	}
+
+
+	// get a playback access token for a live channel (needed for HLS manifest)
+	async getPlaybackAccessToken(login: string): Promise<{ signature: string; value: string } | null> {
+		if (!this.isAuthenticated()) return null;
+
+		interface PlaybackTokenResponse {
+			streamPlaybackAccessToken: {
+				signature: string;
+				value: string;
+			} | null;
+		}
+
+		const response = await this.postGqlRequest<PlaybackTokenResponse>(
+			GQL_OPERATIONS.PlaybackAccessToken,
+			{
+				login: login.toLowerCase(),
+				isLive: true,
+				isVod: false,
+				vodID: '',
+				playerType: 'site'
+			}
+		);
+
+		if (response.errors) {
+			logger.error({ login, errors: response.errors }, 'Failed to get playback access token');
+			return null;
+		}
+
+		const token = response.data?.streamPlaybackAccessToken;
+		if (!token?.signature || !token?.value) {
+			logger.debug({ login }, 'No playback access token returned (stream may be offline)');
+			return null;
+		}
+
+		return { signature: token.signature, value: token.value };
+	}
+
+	// fetch the HLS master manifest for a channel, then resolve the lowest quality stream URL
+	async fetchLowestQualityStreamUrl(
+		login: string,
+		signature: string,
+		value: string
+	): Promise<string | null> {
+		try {
+			const headers = { 'User-Agent': USER_AGENT };
+			const masterUrl =
+				`https://usher.ttvnw.net/api/channel/hls/${login.toLowerCase()}.m3u8` +
+				`?sig=${signature}&token=${encodeURIComponent(value)}`;
+
+			const masterResponse = await fetch(masterUrl, { headers, redirect: 'follow' });
+			if (!masterResponse.ok) {
+				logger.debug({ login, status: masterResponse.status }, 'Failed to fetch HLS master manifest');
+				return null;
+			}
+			const masterPlaylist = await masterResponse.text();
+
+			// last non-empty line in the master playlist is the lowest quality variant URL
+			const masterLines = masterPlaylist.split('\n').filter((l) => l.trim().length > 0);
+			const lowestQualityUrl = masterLines[masterLines.length - 1];
+			if (!lowestQualityUrl || lowestQualityUrl.startsWith('#')) {
+				logger.debug({ login }, 'No stream URL found in master manifest');
+				return null;
+			}
+
+			// fetch the variant playlist to get an actual stream segment URL
+			const variantResponse = await fetch(lowestQualityUrl, { headers, redirect: 'follow' });
+			if (!variantResponse.ok) {
+				logger.debug({ login, status: variantResponse.status }, 'Failed to fetch variant playlist');
+				return null;
+			}
+			const variantPlaylist = await variantResponse.text();
+
+			// second-to-last non-empty line is the segment URL
+			const variantLines = variantPlaylist.split('\n').filter((l) => l.trim().length > 0);
+			const streamSegmentUrl = variantLines[variantLines.length - 1];
+			if (!streamSegmentUrl || streamSegmentUrl.startsWith('#')) {
+				logger.debug({ login }, 'No stream segment URL found in variant playlist');
+				return null;
+			}
+
+			// verify segment URL is reachable
+			const headResponse = await fetch(streamSegmentUrl, { method: 'HEAD', headers, redirect: 'follow' });
+			if (!headResponse.ok) {
+				logger.debug({ login, status: headResponse.status }, 'Stream segment URL HEAD check failed');
+				return null;
+			}
+
+			return streamSegmentUrl;
+		} catch (error) {
+			logger.error({ err: error, login }, 'Error fetching lowest quality stream URL');
+			return null;
+		}
+	}
+
+	async sendMinuteWatchedEvent(spadeUrl: string, encodedPayload: string): Promise<boolean> {
+		try {
+			const response = await fetch(spadeUrl, {
+				method: 'POST',
+				headers: {
+					'User-Agent': USER_AGENT,
+					'Content-Type': 'application/x-www-form-urlencoded'
+				},
+				body: new URLSearchParams({ data: encodedPayload })
+			});
+
+			return response.status === 204;
+		} catch (error) {
+			logger.error({ err: error }, 'Error sending minute-watched event');
+			return false;
+		}
+	}
+}
+
+// encode a minute-watched payload as a base64 JSON string ready for the spade endpoint
+export function encodeMinuteWatchedPayload(
+	channelId: string,
+	broadcastId: string,
+	userId: string,
+	login: string
+): string {
+	const payload = [
+		{
+			event: 'minute-watched',
+			properties: {
+				channel_id: channelId,
+				broadcast_id: broadcastId,
+				player: 'site',
+				user_id: userId,
+				live: true,
+				channel: login
+			}
+		}
+	];
+	return btoa(JSON.stringify(payload));
 }
 
 export const twitchClient = new TwitchClient();

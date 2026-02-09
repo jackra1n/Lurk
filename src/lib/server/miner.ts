@@ -1,5 +1,5 @@
 import { getStreamers } from './config';
-import { twitchClient, type StreamInfo } from './twitch';
+import { twitchClient, encodeMinuteWatchedPayload, type StreamInfo } from './twitch';
 import { twitchPubSub } from './pubsub';
 import { twitchAuth } from './auth';
 import { getLogger } from './logger';
@@ -95,6 +95,7 @@ enum VideoPlaybackMessageType {
 
 class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
+	private minuteWatcherInterval: ReturnType<typeof setInterval> | null = null;
 	private running = false;
 	private startedAt: Date | null = null;
 	private tickCount = 0;
@@ -104,6 +105,8 @@ class MinerService {
 	private lastStartResult: MinerStartResult | null = null;
 
 	private readonly TICK_INTERVAL = 30 * 60_000; // 30 minutes -- PubSub handles real-time events
+	private readonly MINUTE_WATCHED_INTERVAL = 20_000; // 20 seconds
+	private readonly MAX_WATCHED_STREAMERS = 2;
 
 	// message deduplication
 	private lastMessageTimestamp = 0;
@@ -118,6 +121,10 @@ class MinerService {
 		if (this.interval) {
 			clearInterval(this.interval);
 			this.interval = null;
+		}
+		if (this.minuteWatcherInterval) {
+			clearInterval(this.minuteWatcherInterval);
+			this.minuteWatcherInterval = null;
 		}
 
 		twitchPubSub.disconnect();
@@ -221,6 +228,13 @@ class MinerService {
 					logger.error({ err }, 'Tick error');
 				});
 			}, this.TICK_INTERVAL);
+
+			logger.info('Starting minute-watched loop...');
+			this.minuteWatcherInterval = setInterval(() => {
+				this.sendMinuteWatchedForStreamers().catch((err) => {
+					logger.error({ err }, 'Minute-watched loop error');
+				});
+			}, this.MINUTE_WATCHED_INTERVAL);
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to finish miner startup');
 			this.cleanupFailedStart();
@@ -248,6 +262,10 @@ class MinerService {
 		if (this.interval) {
 			clearInterval(this.interval);
 			this.interval = null;
+		}
+		if (this.minuteWatcherInterval) {
+			clearInterval(this.minuteWatcherInterval);
+			this.minuteWatcherInterval = null;
 		}
 
 		twitchPubSub.disconnect();
@@ -449,7 +467,8 @@ class MinerService {
 
 		if (streamInfo) {
 			this.applyStreamInfo(state, streamInfo);
-			if (!state.isLive) {
+			const wasOffline = !state.isLive;
+			if (wasOffline) {
 				state.isLive = true;
 				state.onlineAt = Date.now();
 				state.watchStreakMissing = true;
@@ -459,6 +478,16 @@ class MinerService {
 					{ streamer: state.name, title: state.title, game: state.game, viewers: state.viewers },
 					'Streamer went LIVE'
 				);
+			}
+
+			// fetch spade URL if we don't have one (needed for minute-watched)
+			if (!state.spadeUrl) {
+				const spadeUrl = await twitchClient.getSpadeUrl(state.name);
+				if (spadeUrl) {
+					state.spadeUrl = spadeUrl;
+				} else {
+					logger.warn({ streamer: state.name }, 'Could not fetch spade URL');
+				}
 			}
 		} else {
 			if (state.isLive) {
@@ -470,6 +499,7 @@ class MinerService {
 			state.game = null;
 			state.viewers = 0;
 			state.broadcastId = null;
+			state.spadeUrl = null;
 		}
 	}
 
@@ -525,6 +555,111 @@ class MinerService {
 			if (context.availableClaimId && state.channelId) {
 				logger.info({ streamer: state.name }, 'Found available claim via context check');
 				await this.claimBonus(state.channelId, context.availableClaimId);
+			}
+		}
+	}
+
+	
+	// select up to MAX_WATCHED_STREAMERS online streamers to send minute-watched events for
+	private selectStreamersToWatch(): StreamerState[] {
+		const now = Date.now();
+		const eligible: StreamerState[] = [];
+
+		for (const [, state] of this.streamerStates) {
+			if (
+				state.isLive &&
+				state.channelId &&
+				state.broadcastId &&
+				state.spadeUrl &&
+				(state.onlineAt === 0 || now - state.onlineAt > 30_000)
+			) {
+				eligible.push(state);
+			}
+		}
+
+		// default ORDER priority: take first N from config order
+		const configOrder = getStreamers();
+		eligible.sort((a, b) => {
+			const aIdx = configOrder.indexOf(a.name);
+			const bIdx = configOrder.indexOf(b.name);
+			return (aIdx === -1 ? Infinity : aIdx) - (bIdx === -1 ? Infinity : bIdx);
+		});
+
+		return eligible.slice(0, this.MAX_WATCHED_STREAMERS);
+	}
+
+	/**
+	 * core minute-watched loop body. Called every ~20 seconds.
+	 * for each selected streamer: fetch playback token, resolve HLS stream URL,
+	 * HEAD-verify it, then POST a minute-watched event to the spade endpoint.
+	 */
+	private async sendMinuteWatchedForStreamers(): Promise<void> {
+		if (!this.userId) return;
+
+		const now = Date.now();
+
+		// refresh metadata for online streamers with stale data (>10 minutes)
+		for (const [, state] of this.streamerStates) {
+			if (state.isLive && state.channelId && now - state.lastContextRefresh > 10 * 60_000) {
+				await this.checkStreamerOnline(state).catch((err) => {
+					logger.error({ err, streamer: state.name }, 'Failed to refresh stale stream metadata');
+				});
+			}
+		}
+
+		const selected = this.selectStreamersToWatch();
+		if (selected.length === 0) return;
+
+		const delayBetween = this.MINUTE_WATCHED_INTERVAL / selected.length;
+
+		for (let i = 0; i < selected.length; i++) {
+			const state = selected[i];
+			if (!state.channelId || !state.broadcastId || !state.spadeUrl) continue;
+
+			try {
+				const token = await twitchClient.getPlaybackAccessToken(state.name);
+				if (!token) {
+					logger.debug({ streamer: state.name }, 'Could not get playback token, skipping minute-watched');
+					continue;
+				}
+
+				const streamUrl = await twitchClient.fetchLowestQualityStreamUrl(
+					state.name,
+					token.signature,
+					token.value
+				);
+				if (!streamUrl) {
+					logger.debug({ streamer: state.name }, 'Could not resolve stream URL, skipping minute-watched');
+					continue;
+				}
+
+				const payload = encodeMinuteWatchedPayload(
+					state.channelId,
+					state.broadcastId,
+					this.userId,
+					state.name
+				);
+
+				const success = await twitchClient.sendMinuteWatchedEvent(state.spadeUrl, payload);
+				if (success) {
+					if (state.minuteWatchedTimestamp > 0) {
+						state.minuteWatched += (now - state.minuteWatchedTimestamp) / 60_000;
+					}
+					state.minuteWatchedTimestamp = now;
+					logger.debug(
+						{ streamer: state.name, minuteWatched: state.minuteWatched.toFixed(2) },
+						'Sent minute-watched event'
+					);
+				} else {
+					logger.debug({ streamer: state.name }, 'Minute-watched POST did not return 204');
+				}
+			} catch (error) {
+				logger.error({ err: error, streamer: state.name }, 'Error in minute-watched for streamer');
+			}
+
+			// space out requests between streamers (skip delay after last one)
+			if (i < selected.length - 1) {
+				await new Promise((resolve) => setTimeout(resolve, delayBetween));
 			}
 		}
 	}

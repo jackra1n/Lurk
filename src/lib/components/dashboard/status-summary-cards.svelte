@@ -1,20 +1,12 @@
 <script lang="ts">
 	import { Card, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import type { AuthStatusResponse, MinerStatusResponse } from './types';
+	import type { MinerStatusResponse } from './types';
 
 	let {
-		authStatus,
 		minerStatus
 	}: {
-		authStatus: AuthStatusResponse;
 		minerStatus: MinerStatusResponse;
 	} = $props();
-
-	const authLabel = () => {
-		if (authStatus.authenticated) return 'Connected';
-		if (authStatus.pendingLogin) return 'Awaiting Confirmation';
-		return 'Not Connected';
-	};
 
 	const minerLabel = () => {
 		if (minerStatus.running) return 'Running';
@@ -38,12 +30,6 @@
 		return 'bg-red-500';
 	};
 
-	const authStatusDotClass = () => {
-		if (authStatus.authenticated) return 'bg-emerald-500';
-		if (authStatus.pendingLogin) return 'bg-amber-400';
-		return 'bg-red-500';
-	};
-
 	const minerStatusTooltip = () => {
 		if (minerStatus.running) return 'Miner is running and monitoring configured channels.';
 		if (minerStatus.lifecycle === 'ready') return 'Twitch is connected. Miner can be started now.';
@@ -55,7 +41,7 @@
 	};
 </script>
 
-<section class="grid gap-4 md:grid-cols-3">
+<section class="grid gap-4 md:grid-cols-2">
 	<Card class="bg-card/80">
 		<CardHeader class="gap-2">
 			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
@@ -64,16 +50,6 @@
 				<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
 			</div>
 			<CardDescription class="text-sm">{minerDescription()}</CardDescription>
-		</CardHeader>
-	</Card>
-
-	<Card class="bg-card/80">
-		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Auth Status</p>
-			<div class="flex items-center gap-2">
-				<span class={`size-2.5 rounded-full ${authStatusDotClass()}`} aria-hidden="true"></span>
-				<CardTitle class="text-2xl">{authLabel()}</CardTitle>
-			</div>
 		</CardHeader>
 	</Card>
 

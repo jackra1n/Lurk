@@ -3,9 +3,9 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import Sun from '@lucide/svelte/icons/sun';
 	import { Button } from '$lib/components/ui/button';
-	import AuthenticationCard from '$lib/components/dashboard/authentication-card.svelte';
 	import QuickActionsCard from '$lib/components/dashboard/quick-actions-card.svelte';
 	import StatusSummaryCards from '$lib/components/dashboard/status-summary-cards.svelte';
+	import TopbarAuthControl from '$lib/components/dashboard/topbar-auth-control.svelte';
 	import TrackedStreamersCard from '$lib/components/dashboard/tracked-streamers-card.svelte';
 	import type {
 		AuthStatusResponse,
@@ -41,7 +41,6 @@
 	let isDark = $state(true);
 	let authStatus = $state<AuthStatusResponse>(defaultAuthStatus);
 	let minerStatus = $state<MinerStatusResponse>(defaultMinerStatus);
-	let loadingAuthAction = $state(false);
 	let loadingStartAfterAuth = $state(false);
 	let message = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
@@ -195,23 +194,6 @@
 		}
 	};
 
-	const postAuthAction = async (action: 'startLogin' | 'cancelLogin' | 'logout') => {
-		const response = await fetch('/api/auth', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ action })
-		});
-		const payload = await readJson(response);
-
-		if (!response.ok || !(payload && typeof payload === 'object' && (payload as { success?: unknown }).success)) {
-			throw new Error(getErrorMessage(payload, `Failed to ${action}`));
-		}
-
-		return payload;
-	};
-
 	const startMinerAfterAuth = async () => {
 		loadingStartAfterAuth = true;
 
@@ -243,53 +225,11 @@
 		}
 	};
 
-	const startLogin = async () => {
-		loadingAuthAction = true;
-		errorMessage = null;
-		message = null;
-
+	const refreshStatusAfterAuthAction = async () => {
 		try {
-			autoStartAttempted = false;
-			await postAuthAction('startLogin');
-			message = 'Enter the code on Twitch to complete login.';
 			await refreshAllStatus({ autoStart: false });
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Failed to start login';
-		} finally {
-			loadingAuthAction = false;
-		}
-	};
-
-	const cancelLogin = async () => {
-		loadingAuthAction = true;
-		errorMessage = null;
-		message = null;
-
-		try {
-			await postAuthAction('cancelLogin');
-			message = 'Login cancelled.';
-			await refreshAllStatus({ autoStart: false });
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Failed to cancel login';
-		} finally {
-			loadingAuthAction = false;
-		}
-	};
-
-	const logout = async () => {
-		loadingAuthAction = true;
-		errorMessage = null;
-		message = null;
-
-		try {
-			autoStartAttempted = false;
-			await postAuthAction('logout');
-			message = 'Logged out.';
-			await refreshAllStatus({ autoStart: false });
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Failed to logout';
-		} finally {
-			loadingAuthAction = false;
+			errorMessage = error instanceof Error ? error.message : 'Failed to refresh status';
 		}
 	};
 </script>
@@ -302,35 +242,37 @@
 	<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
 		<header class="flex items-center justify-between gap-3">
 			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Lurk</h1>
-			<Button type="button" variant="outline" size="sm" onclick={toggleTheme}>
-				{#if isDark}
-					<Moon class="size-4" />
-				{:else}
-					<Sun class="size-4" />
-				{/if}
-				{isDark ? 'Dark' : 'Light'}
-			</Button>
+			<div class="flex items-center gap-2">
+				<TopbarAuthControl
+					{authStatus}
+					{loadingStartAfterAuth}
+					onAuthStatusChange={refreshStatusAfterAuthAction}
+				/>
+				<Button type="button" variant="outline" size="sm" onclick={toggleTheme}>
+					{#if isDark}
+						<Moon class="size-4" />
+					{:else}
+						<Sun class="size-4" />
+					{/if}
+					{isDark ? 'Dark' : 'Light'}
+				</Button>
+			</div>
 		</header>
 
-		<StatusSummaryCards
-			{authStatus}
-			{minerStatus}
-		/>
-
-		<section class="grid gap-4 lg:grid-cols-[2fr_1fr]">
-			<TrackedStreamersCard trackedStreamerCount={minerStatus.configuredStreamers.length} />
-
-			<AuthenticationCard
-				{authStatus}
-				minerReason={minerStatus.reason}
+		{#if errorMessage}
+			<p class="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 				{errorMessage}
+			</p>
+		{:else if message}
+			<p class="rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
 				{message}
-				{loadingAuthAction}
-				{loadingStartAfterAuth}
-				onStartLogin={startLogin}
-				onCancelLogin={cancelLogin}
-				onLogout={logout}
-			/>
+			</p>
+		{/if}
+
+		<StatusSummaryCards {minerStatus} />
+
+		<section>
+			<TrackedStreamersCard trackedStreamerCount={minerStatus.configuredStreamers.length} />
 		</section>
 
 		<QuickActionsCard actions={quickActions} />

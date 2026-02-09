@@ -1,0 +1,570 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "08c9e319-612c-4e4e-b287-16fda52dcd0f",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "balance_samples": {
+      "name": "balance_samples",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "streamer_id": {
+          "name": "streamer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sampled_at_ms": {
+          "name": "sampled_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "balance": {
+          "name": "balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_event_id": {
+          "name": "source_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "balance_samples_streamer_sampled_unique": {
+          "name": "balance_samples_streamer_sampled_unique",
+          "columns": [
+            "streamer_id",
+            "sampled_at_ms"
+          ],
+          "isUnique": true
+        },
+        "idx_balance_samples_streamer_time": {
+          "name": "idx_balance_samples_streamer_time",
+          "columns": [
+            "streamer_id",
+            "sampled_at_ms"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "balance_samples_streamer_id_streamers_id_fk": {
+          "name": "balance_samples_streamer_id_streamers_id_fk",
+          "tableFrom": "balance_samples",
+          "tableTo": "streamers",
+          "columnsFrom": [
+            "streamer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "balance_samples_source_event_id_channel_point_events_id_fk": {
+          "name": "balance_samples_source_event_id_channel_point_events_id_fk",
+          "tableFrom": "balance_samples",
+          "tableTo": "channel_point_events",
+          "columnsFrom": [
+            "source_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "channel_point_events": {
+      "name": "channel_point_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "occurred_at_ms": {
+          "name": "occurred_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "streamer_id": {
+          "name": "streamer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "miner_run_id": {
+          "name": "miner_run_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stream_session_id": {
+          "name": "stream_session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "points_delta": {
+          "name": "points_delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "balance_after": {
+          "name": "balance_after",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "broadcast_id": {
+          "name": "broadcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "viewers_count": {
+          "name": "viewers_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload_json": {
+          "name": "payload_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_channel_point_events_streamer_time": {
+          "name": "idx_channel_point_events_streamer_time",
+          "columns": [
+            "streamer_id",
+            "occurred_at_ms"
+          ],
+          "isUnique": false
+        },
+        "idx_channel_point_events_type_time": {
+          "name": "idx_channel_point_events_type_time",
+          "columns": [
+            "event_type",
+            "occurred_at_ms"
+          ],
+          "isUnique": false
+        },
+        "idx_channel_point_events_balance_timeline": {
+          "name": "idx_channel_point_events_balance_timeline",
+          "columns": [
+            "streamer_id",
+            "occurred_at_ms",
+            "balance_after"
+          ],
+          "isUnique": false,
+          "where": "\"channel_point_events\".\"balance_after\" IS NOT NULL"
+        },
+        "idx_channel_point_events_reason_time": {
+          "name": "idx_channel_point_events_reason_time",
+          "columns": [
+            "reason_code",
+            "occurred_at_ms"
+          ],
+          "isUnique": false,
+          "where": "\"channel_point_events\".\"reason_code\" IS NOT NULL"
+        },
+        "idx_channel_point_events_run_time": {
+          "name": "idx_channel_point_events_run_time",
+          "columns": [
+            "miner_run_id",
+            "occurred_at_ms"
+          ],
+          "isUnique": false,
+          "where": "\"channel_point_events\".\"miner_run_id\" IS NOT NULL"
+        },
+        "idx_channel_point_events_stream_session_time": {
+          "name": "idx_channel_point_events_stream_session_time",
+          "columns": [
+            "stream_session_id",
+            "occurred_at_ms"
+          ],
+          "isUnique": false,
+          "where": "\"channel_point_events\".\"stream_session_id\" IS NOT NULL"
+        }
+      },
+      "foreignKeys": {
+        "channel_point_events_streamer_id_streamers_id_fk": {
+          "name": "channel_point_events_streamer_id_streamers_id_fk",
+          "tableFrom": "channel_point_events",
+          "tableTo": "streamers",
+          "columnsFrom": [
+            "streamer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "channel_point_events_miner_run_id_miner_runs_id_fk": {
+          "name": "channel_point_events_miner_run_id_miner_runs_id_fk",
+          "tableFrom": "channel_point_events",
+          "tableTo": "miner_runs",
+          "columnsFrom": [
+            "miner_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "channel_point_events_stream_session_id_stream_sessions_id_fk": {
+          "name": "channel_point_events_stream_session_id_stream_sessions_id_fk",
+          "tableFrom": "channel_point_events",
+          "tableTo": "stream_sessions",
+          "columnsFrom": [
+            "stream_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "miner_runs": {
+      "name": "miner_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "started_at_ms": {
+          "name": "started_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stopped_at_ms": {
+          "name": "stopped_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "start_reason": {
+          "name": "start_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stop_reason": {
+          "name": "stop_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_miner_runs_started_at": {
+          "name": "idx_miner_runs_started_at",
+          "columns": [
+            "started_at_ms"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "stream_sessions": {
+      "name": "stream_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "streamer_id": {
+          "name": "streamer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "broadcast_id": {
+          "name": "broadcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "game_name": {
+          "name": "game_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at_ms": {
+          "name": "started_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ended_at_ms": {
+          "name": "ended_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_stream_sessions_streamer_started": {
+          "name": "idx_stream_sessions_streamer_started",
+          "columns": [
+            "streamer_id",
+            "started_at_ms"
+          ],
+          "isUnique": false
+        },
+        "idx_stream_sessions_streamer_ended": {
+          "name": "idx_stream_sessions_streamer_ended",
+          "columns": [
+            "streamer_id",
+            "ended_at_ms"
+          ],
+          "isUnique": false
+        },
+        "idx_stream_sessions_unique": {
+          "name": "idx_stream_sessions_unique",
+          "columns": [
+            "streamer_id",
+            "broadcast_id",
+            "started_at_ms"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "stream_sessions_streamer_id_streamers_id_fk": {
+          "name": "stream_sessions_streamer_id_streamers_id_fk",
+          "tableFrom": "stream_sessions",
+          "tableTo": "streamers",
+          "columnsFrom": [
+            "streamer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "streamers": {
+      "name": "streamers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "login": {
+          "name": "login",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "channel_id": {
+          "name": "channel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at_ms": {
+          "name": "updated_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_streamers_login_unique": {
+          "name": "idx_streamers_login_unique",
+          "columns": [
+            "login"
+          ],
+          "isUnique": true,
+          "where": "\"streamers\".\"login\" IS NOT NULL"
+        },
+        "idx_streamers_channel_id_unique": {
+          "name": "idx_streamers_channel_id_unique",
+          "columns": [
+            "channel_id"
+          ],
+          "isUnique": true,
+          "where": "\"streamers\".\"channel_id\" IS NOT NULL"
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "streamers_login_or_channel_id_check": {
+          "name": "streamers_login_or_channel_id_check",
+          "value": "\"streamers\".\"login\" IS NOT NULL OR \"streamers\".\"channel_id\" IS NOT NULL"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

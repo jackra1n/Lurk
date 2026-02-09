@@ -3,6 +3,7 @@ import { twitchClient, encodeMinuteWatchedPayload, type StreamInfo } from './twi
 import { twitchPubSub } from './pubsub';
 import { twitchAuth } from './auth';
 import { getLogger } from './logger';
+import { eventStore } from './db/events';
 
 const logger = getLogger('Miner');
 
@@ -117,6 +118,14 @@ class MinerService {
 		return result;
 	}
 
+	private withEventStore(operation: string, action: () => void): void {
+		try {
+			action();
+		} catch (error) {
+			logger.error({ err: error, operation }, 'Failed to persist miner event');
+		}
+	}
+
 	private cleanupFailedStart(): void {
 		if (this.interval) {
 			clearInterval(this.interval);
@@ -128,6 +137,9 @@ class MinerService {
 		}
 
 		twitchPubSub.disconnect();
+		this.withEventStore('run_stop_failed_start', () => {
+			eventStore.stopRun('startup_failed');
+		});
 		this.running = false;
 		this.startedAt = null;
 		this.userId = null;
@@ -169,6 +181,14 @@ class MinerService {
 		}
 
 		this.userId = twitchAuth.getUserId();
+		this.withEventStore('run_start', () => {
+			const authStatus = twitchAuth.getStatus();
+			eventStore.startRun({
+				startReason: 'started',
+				userId: this.userId,
+				username: authStatus.username
+			});
+		});
 
 		this.running = true;
 		this.startedAt = new Date();
@@ -269,6 +289,9 @@ class MinerService {
 		}
 
 		twitchPubSub.disconnect();
+		this.withEventStore('run_stop', () => {
+			eventStore.stopRun('stopped');
+		});
 
 		this.running = false;
 		this.startedAt = null;
@@ -312,6 +335,16 @@ class MinerService {
 				if (!channelId) {
 					logger.warn({ streamer: name }, 'Could not get channel ID');
 				}
+			}
+
+			const state = this.streamerStates.get(name);
+			if (state) {
+				this.withEventStore('register_streamer', () => {
+					eventStore.registerStreamer({
+						login: state.name,
+						channelId: state.channelId
+					});
+				});
 			}
 		}
 
@@ -381,9 +414,22 @@ class MinerService {
 		if (messageType === CommunityPointsMessageType.ClaimAvailable) {
 			const claimData = data as { data: ClaimAvailableData };
 			const { channel_id: channelId, id: claimId } = claimData.data.claim;
+			const streamer = this.findStreamerByChannelId(channelId);
 
 			logger.info({ channelId }, 'Claim available');
-			this.claimBonus(channelId, claimId);
+			this.withEventStore('claim_available', () => {
+				eventStore.recordEvent({
+					streamer: {
+						login: streamer?.name,
+						channelId
+					},
+					eventType: 'claim_available',
+					source: 'pubsub',
+					claimId,
+					payload: data
+				});
+			});
+			this.claimBonus(channelId, claimId, 'pubsub');
 		} else if (messageType === CommunityPointsMessageType.PointsEarned) {
 			const pointsData = data as { data: PointsEarnedData };
 			const { balance, point_gain } = pointsData.data;
@@ -395,6 +441,23 @@ class MinerService {
 			);
 
 			const streamer = channelId ? this.findStreamerByChannelId(channelId) : undefined;
+			if (channelId) {
+				this.withEventStore('points_earned', () => {
+					eventStore.recordEvent({
+						streamer: {
+							login: streamer?.name,
+							channelId
+						},
+						eventType: 'points_earned',
+						source: 'pubsub',
+						reasonCode: point_gain.reason_code,
+						pointsDelta: point_gain.total_points,
+						balanceAfter: balance.balance,
+						payload: data
+					});
+				});
+			}
+
 			if (streamer) {
 				streamer.channelPoints = balance.balance;
 
@@ -425,9 +488,34 @@ class MinerService {
 			streamer.streamUpAt = new Date();
 			logger.debug({ streamer: streamer.name }, 'stream-up received, waiting for verification');
 		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
+			const wasLive = streamer.isLive;
+			const previousTitle = streamer.title;
+			const previousGame = streamer.game;
+			const previousViewers = streamer.viewers;
+			const previousBroadcastId = streamer.broadcastId;
+
 			if (streamer.isLive) {
 				logger.info({ streamer: streamer.name }, 'Streamer went OFFLINE');
 			}
+
+			if (wasLive) {
+				this.withEventStore('stream_down_pubsub', () => {
+					eventStore.recordEvent({
+						streamer: {
+							login: streamer.name,
+							channelId: streamer.channelId
+						},
+						eventType: 'stream_down',
+						source: 'pubsub',
+						broadcastId: previousBroadcastId,
+						title: previousTitle,
+						gameName: previousGame,
+						viewersCount: previousViewers,
+						payload: data
+					});
+				});
+			}
+
 			streamer.isLive = false;
 			streamer.streamDownAt = new Date();
 			streamer.offlineAt = Date.now();
@@ -474,6 +562,20 @@ class MinerService {
 				state.watchStreakMissing = true;
 				state.minuteWatched = 0;
 				state.minuteWatchedTimestamp = 0;
+				this.withEventStore('stream_up_gql', () => {
+					eventStore.recordEvent({
+						streamer: {
+							login: state.name,
+							channelId: state.channelId
+						},
+						eventType: 'stream_up',
+						source: 'gql_stream',
+						broadcastId: state.broadcastId,
+						title: state.title,
+						gameName: state.game,
+						viewersCount: state.viewers
+					});
+				});
 				logger.info(
 					{ streamer: state.name, title: state.title, game: state.game, viewers: state.viewers },
 					'Streamer went LIVE'
@@ -491,8 +593,26 @@ class MinerService {
 			}
 		} else {
 			if (state.isLive) {
+				const previousTitle = state.title;
+				const previousGame = state.game;
+				const previousViewers = state.viewers;
+				const previousBroadcastId = state.broadcastId;
 				state.isLive = false;
 				state.offlineAt = Date.now();
+				this.withEventStore('stream_down_gql', () => {
+					eventStore.recordEvent({
+						streamer: {
+							login: state.name,
+							channelId: state.channelId
+						},
+						eventType: 'stream_down',
+						source: 'gql_stream',
+						broadcastId: previousBroadcastId,
+						title: previousTitle,
+						gameName: previousGame,
+						viewersCount: previousViewers
+					});
+				});
 				logger.info({ streamer: state.name }, 'Streamer went OFFLINE (verified via API)');
 			}
 			state.title = null;
@@ -510,13 +630,55 @@ class MinerService {
 		state.viewers = info.viewersCount;
 	}
 
-	private async claimBonus(channelId: string, claimId: string): Promise<void> {
+	private async claimBonus(
+		channelId: string,
+		claimId: string,
+		source: 'pubsub' | 'gql_context'
+	): Promise<void> {
+		const streamer = this.findStreamerByChannelId(channelId);
+		this.withEventStore('claim_attempt', () => {
+			eventStore.recordEvent({
+				streamer: {
+					login: streamer?.name,
+					channelId
+				},
+				eventType: 'claim_attempt',
+				source,
+				claimId
+			});
+		});
+
 		try {
 			const success = await twitchClient.claimBonus(channelId, claimId);
 			if (success) {
+				this.withEventStore('claim_success', () => {
+					eventStore.recordEvent({
+						streamer: {
+							login: streamer?.name,
+							channelId
+						},
+						eventType: 'claim_success',
+						source,
+						claimId
+					});
+				});
 				logger.info({ channelId }, 'Successfully claimed bonus');
 			}
 		} catch (error) {
+			this.withEventStore('claim_failed', () => {
+				eventStore.recordEvent({
+					streamer: {
+						login: streamer?.name,
+						channelId
+					},
+					eventType: 'claim_failed',
+					source,
+					claimId,
+					payload: {
+						error: String(error)
+					}
+				});
+			});
 			logger.error({ err: error, channelId }, 'Failed to claim bonus');
 		}
 	}
@@ -551,15 +713,39 @@ class MinerService {
 			}
 			state.channelPoints = context.balance;
 			state.activeMultipliers = context.activeMultipliers;
+			this.withEventStore('context_snapshot', () => {
+				eventStore.recordEvent({
+					streamer: {
+						login: state.name,
+						channelId: state.channelId
+					},
+					eventType: 'context_snapshot',
+					source: 'gql_context',
+					balanceAfter: context.balance,
+					payload: {
+						activeMultipliers: context.activeMultipliers
+					}
+				});
+			});
 
 			if (context.availableClaimId && state.channelId) {
 				logger.info({ streamer: state.name }, 'Found available claim via context check');
-				await this.claimBonus(state.channelId, context.availableClaimId);
+				this.withEventStore('claim_available_context', () => {
+					eventStore.recordEvent({
+						streamer: {
+							login: state.name,
+							channelId: state.channelId
+						},
+						eventType: 'claim_available',
+						source: 'gql_context',
+						claimId: context.availableClaimId
+					});
+				});
+				await this.claimBonus(state.channelId, context.availableClaimId, 'gql_context');
 			}
 		}
 	}
 
-	
 	// select up to MAX_WATCHED_STREAMERS online streamers to send minute-watched events for
 	private selectStreamersToWatch(): StreamerState[] {
 		const now = Date.now();
@@ -646,11 +832,42 @@ class MinerService {
 						state.minuteWatched += (now - state.minuteWatchedTimestamp) / 60_000;
 					}
 					state.minuteWatchedTimestamp = now;
+					this.withEventStore('minute_watched_tick', () => {
+						eventStore.recordEvent({
+							streamer: {
+								login: state.name,
+								channelId: state.channelId
+							},
+							eventType: 'minute_watched_tick',
+							source: 'spade',
+							broadcastId: state.broadcastId,
+							viewersCount: state.viewers,
+							payload: {
+								success: true,
+								minuteWatched: Number(state.minuteWatched.toFixed(2))
+							}
+						});
+					});
 					logger.debug(
 						{ streamer: state.name, minuteWatched: state.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'
 					);
 				} else {
+					this.withEventStore('minute_watched_tick_failed', () => {
+						eventStore.recordEvent({
+							streamer: {
+								login: state.name,
+								channelId: state.channelId
+							},
+							eventType: 'minute_watched_tick',
+							source: 'spade',
+							broadcastId: state.broadcastId,
+							viewersCount: state.viewers,
+							payload: {
+								success: false
+							}
+						});
+					});
 					logger.debug({ streamer: state.name }, 'Minute-watched POST did not return 204');
 				}
 			} catch (error) {

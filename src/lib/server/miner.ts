@@ -1,5 +1,5 @@
 import { getStreamers } from './config';
-import { twitchClient } from './twitch';
+import { twitchClient, type StreamInfo } from './twitch';
 import { twitchPubSub } from './pubsub';
 import { twitchAuth } from './auth';
 import { getLogger } from './logger';
@@ -10,11 +10,28 @@ export interface StreamerState {
 	name: string;
 	channelId: string | null;
 	isLive: boolean;
-	lastChecked: Date | null;
 	channelPoints: number;
 	startingPoints: number | null;
+	// Stream metadata
+	title: string | null;
+	game: string | null;
+	viewers: number;
+	broadcastId: string | null;
+	spadeUrl: string | null;
+	// Timestamps
 	streamUpAt: Date | null;
 	streamDownAt: Date | null;
+	onlineAt: number; // epoch ms, 0 = never
+	offlineAt: number; // epoch ms, 0 = never
+	lastChecked: Date | null;
+	lastContextRefresh: number; // epoch ms
+	// Watch tracking
+	minuteWatched: number;
+	minuteWatchedTimestamp: number;
+	watchStreakMissing: boolean;
+	// Multipliers & history
+	activeMultipliers: { factor: number }[];
+	history: Record<string, { counter: number; amount: number }>;
 }
 
 export interface MinerStatus {
@@ -86,7 +103,11 @@ class MinerService {
 	private userId: string | null = null;
 	private lastStartResult: MinerStartResult | null = null;
 
-	private readonly TICK_INTERVAL = 60_000; // 60 seconds (less frequent since PubSub handles real-time events)
+	private readonly TICK_INTERVAL = 30 * 60_000; // 30 minutes -- PubSub handles real-time events
+
+	// message deduplication
+	private lastMessageTimestamp = 0;
+	private lastMessageIdentifier = '';
 
 	private setStartResult(result: MinerStartResult): MinerStartResult {
 		this.lastStartResult = result;
@@ -182,8 +203,17 @@ class MinerService {
 				}
 			}
 
-			logger.info('Starting background loop...');
+			// seed initial stream metadata and live status via API
+			logger.info('Fetching initial stream info...');
+			for (const [, state] of this.streamerStates) {
+				if (state.channelId) {
+					await this.checkStreamerOnline(state);
+				}
+			}
 
+			logger.info('Starting context refresh loop...');
+
+			// initial context refresh
 			await this.tick();
 
 			this.interval = setInterval(() => {
@@ -241,11 +271,24 @@ class MinerService {
 					name,
 					channelId,
 					isLive: false,
-					lastChecked: null,
 					channelPoints: 0,
 					startingPoints: null,
+					title: null,
+					game: null,
+					viewers: 0,
+					broadcastId: null,
+					spadeUrl: null,
 					streamUpAt: null,
-					streamDownAt: null
+					streamDownAt: null,
+					onlineAt: 0,
+					offlineAt: 0,
+					lastChecked: null,
+					lastContextRefresh: 0,
+					minuteWatched: 0,
+					minuteWatchedTimestamp: 0,
+					watchStreakMissing: false,
+					activeMultipliers: [],
+					history: {}
 				});
 
 				if (!channelId) {
@@ -290,6 +333,15 @@ class MinerService {
 	}
 
 	private handlePubSubMessage(topic: string, messageType: string, data: unknown): void {
+		const now = Date.now();
+		const identifier = `${messageType}.${topic}`;
+		if (identifier === this.lastMessageIdentifier && now - this.lastMessageTimestamp < 500) {
+			logger.debug({ topic, messageType }, 'Skipping duplicate PubSub message');
+			return;
+		}
+		this.lastMessageTimestamp = now;
+		this.lastMessageIdentifier = identifier;
+
 		const topicParts = topic.split('.');
 		const topicType = topicParts[0];
 		const topicId = topicParts[1];
@@ -327,6 +379,17 @@ class MinerService {
 			const streamer = channelId ? this.findStreamerByChannelId(channelId) : undefined;
 			if (streamer) {
 				streamer.channelPoints = balance.balance;
+
+				if (point_gain.reason_code === 'WATCH_STREAK') {
+					streamer.watchStreakMissing = false;
+				}
+
+				const key = point_gain.reason_code;
+				if (!streamer.history[key]) {
+					streamer.history[key] = { counter: 0, amount: 0 };
+				}
+				streamer.history[key].counter++;
+				streamer.history[key].amount += point_gain.total_points;
 			}
 		}
 	}
@@ -334,29 +397,87 @@ class MinerService {
 	private handleVideoPlaybackMessage(
 		channelId: string,
 		messageType: string,
-		_data: unknown
+		data: unknown
 	): void {
 		const streamer = this.findStreamerByChannelId(channelId);
 		if (!streamer) return;
 
 		if (messageType === VideoPlaybackMessageType.StreamUp) {
+			// record timestamp but do NOT mark live yet -- wait for viewcount verification
 			streamer.streamUpAt = new Date();
-			if (!streamer.isLive) {
-				streamer.isLive = true;
-				logger.info({ streamer: streamer.name }, 'Streamer went LIVE');
-			}
+			logger.debug({ streamer: streamer.name }, 'stream-up received, waiting for verification');
 		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 			if (streamer.isLive) {
-				streamer.isLive = false;
-				streamer.streamDownAt = new Date();
 				logger.info({ streamer: streamer.name }, 'Streamer went OFFLINE');
 			}
+			streamer.isLive = false;
+			streamer.streamDownAt = new Date();
+			streamer.offlineAt = Date.now();
+			streamer.watchStreakMissing = false;
+			streamer.title = null;
+			streamer.game = null;
+			streamer.viewers = 0;
+			streamer.broadcastId = null;
 		} else if (messageType === VideoPlaybackMessageType.Viewcount) {
-			if (!streamer.isLive) {
-				streamer.isLive = true;
-				streamer.streamUpAt = new Date();
+			// update viewer count from PubSub data
+			const viewData = data as { viewers?: number };
+			if (viewData.viewers !== undefined) {
+				streamer.viewers = viewData.viewers;
+			}
+
+			if (
+				!streamer.isLive &&
+				streamer.streamUpAt &&
+				Date.now() - streamer.streamUpAt.getTime() > 2 * 60_000
+			) {
+				this.checkStreamerOnline(streamer).catch((err) => {
+					logger.error({ err, streamer: streamer.name }, 'Failed to check streamer online');
+				});
 			}
 		}
+	}
+
+	private async checkStreamerOnline(state: StreamerState): Promise<void> {
+		if (!state.channelId) return;
+
+		if (state.offlineAt > 0 && Date.now() - state.offlineAt < 60_000) {
+			logger.debug({ streamer: state.name }, 'Skipping online check (offline debounce)');
+			return;
+		}
+
+		const streamInfo = await twitchClient.getStreamInfo(state.name);
+
+		if (streamInfo) {
+			this.applyStreamInfo(state, streamInfo);
+			if (!state.isLive) {
+				state.isLive = true;
+				state.onlineAt = Date.now();
+				state.watchStreakMissing = true;
+				state.minuteWatched = 0;
+				state.minuteWatchedTimestamp = 0;
+				logger.info(
+					{ streamer: state.name, title: state.title, game: state.game, viewers: state.viewers },
+					'Streamer went LIVE'
+				);
+			}
+		} else {
+			if (state.isLive) {
+				state.isLive = false;
+				state.offlineAt = Date.now();
+				logger.info({ streamer: state.name }, 'Streamer went OFFLINE (verified via API)');
+			}
+			state.title = null;
+			state.game = null;
+			state.viewers = 0;
+			state.broadcastId = null;
+		}
+	}
+
+	private applyStreamInfo(state: StreamerState, info: StreamInfo): void {
+		state.broadcastId = info.broadcastId;
+		state.title = info.title;
+		state.game = info.game?.displayName ?? null;
+		state.viewers = info.viewersCount;
 	}
 
 	private async claimBonus(channelId: string, claimId: string): Promise<void> {
@@ -385,37 +506,25 @@ class MinerService {
 
 	private async processStreamer(state: StreamerState): Promise<void> {
 		state.lastChecked = new Date();
+		state.lastContextRefresh = Date.now();
 
 		if (!state.channelId) {
 			logger.debug({ streamer: state.name }, 'Skipping streamer without channel ID');
 			return;
 		}
 
-		const isLive = await twitchClient.isChannelLiveById(state.channelId);
-		const wasLive = state.isLive;
-		state.isLive = isLive;
+		// only refresh channel points context -- PubSub handles live status
+		const context = await twitchClient.getChannelPointsContext(state.name);
+		if (context) {
+			if (state.startingPoints === null) {
+				state.startingPoints = context.balance;
+			}
+			state.channelPoints = context.balance;
+			state.activeMultipliers = context.activeMultipliers;
 
-		if (isLive && !wasLive) {
-			state.streamUpAt = new Date();
-			logger.info({ streamer: state.name }, 'Streamer went LIVE (detected via API)');
-		} else if (!isLive && wasLive) {
-			state.streamDownAt = new Date();
-			logger.info({ streamer: state.name }, 'Streamer went OFFLINE (detected via API)');
-		}
-
-		// Check for available bonus claims (backup if PubSub misses it)
-		if (isLive) {
-			const context = await twitchClient.getChannelPointsContext(state.name);
-			if (context) {
-				if (state.startingPoints === null) {
-					state.startingPoints = context.balance;
-				}
-				state.channelPoints = context.balance;
-
-				if (context.availableClaimId && state.channelId) {
-					logger.info({ streamer: state.name }, 'Found available claim via API check');
-					await this.claimBonus(state.channelId, context.availableClaimId);
-				}
+			if (context.availableClaimId && state.channelId) {
+				logger.info({ streamer: state.name }, 'Found available claim via context check');
+				await this.claimBonus(state.channelId, context.availableClaimId);
 			}
 		}
 	}

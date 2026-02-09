@@ -40,12 +40,12 @@ export const GQL_OPERATIONS = {
 			}
 		}
 	},
-	WithIsStreamLiveQuery: {
-		operationName: 'WithIsStreamLiveQuery',
+	VideoPlayerStreamInfoOverlayChannel: {
+		operationName: 'VideoPlayerStreamInfoOverlayChannel',
 		extensions: {
 			persistedQuery: {
 				version: 1,
-				sha256Hash: '04e46329a6786ff3a81c01c50bfa5d725902507a0deb83b0edbf7abe7a3716ea'
+				sha256Hash: 'a5f2e34d626a9f4f5c0204f910bab2194948a9502089be558bb6e779a9e1b3d2'
 			}
 		}
 	}

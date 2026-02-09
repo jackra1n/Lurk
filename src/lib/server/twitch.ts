@@ -9,9 +9,18 @@ export interface TwitchUser {
 	displayName: string;
 }
 
+export interface StreamInfo {
+	broadcastId: string;
+	title: string;
+	game: { displayName: string } | null;
+	tags: { localizedName: string }[];
+	viewersCount: number;
+}
+
 export interface ChannelPointsContext {
 	balance: number;
 	availableClaimId: string | null;
+	activeMultipliers: { factor: number }[];
 }
 
 interface GqlResponse<T = unknown> {
@@ -121,6 +130,7 @@ export class TwitchClient {
 						communityPoints: {
 							balance: number;
 							availableClaim: { id: string } | null;
+							activeMultipliers: { factor: number }[];
 						};
 					};
 				};
@@ -140,41 +150,50 @@ export class TwitchClient {
 		const points = response.data.community.channel.self.communityPoints;
 		return {
 			balance: points.balance,
-			availableClaimId: points.availableClaim?.id || null
+			availableClaimId: points.availableClaim?.id || null,
+			activeMultipliers: points.activeMultipliers || []
 		};
 	}
 
-	async isChannelLiveById(channelId: string): Promise<boolean> {
+	async getStreamInfo(channelLogin: string): Promise<StreamInfo | null> {
 		if (!this.isAuthenticated()) {
-			return false;
+			return null;
 		}
 
-		interface StreamLiveResponse {
+		interface StreamInfoResponse {
 			user: {
-				stream: { id: string } | null;
+				stream: {
+					id: string;
+					title: string;
+					game: { displayName: string } | null;
+					freeformTags: { name: string }[];
+					viewersCount: number;
+				} | null;
 			} | null;
 		}
 
-		const response = await this.postGqlRequest<StreamLiveResponse>(
-			GQL_OPERATIONS.WithIsStreamLiveQuery,
-			{ id: channelId }
+		const response = await this.postGqlRequest<StreamInfoResponse>(
+			GQL_OPERATIONS.VideoPlayerStreamInfoOverlayChannel,
+			{ channel: channelLogin.toLowerCase() }
 		);
 
 		if (response.errors) {
-			logger.error({ channelId }, 'Failed to check live status');
-			return false;
+			logger.error({ channelLogin }, 'Failed to get stream info');
+			return null;
 		}
 
-		const isLive = response.data?.user?.stream !== null;
-		return isLive;
-	}
-
-	async isChannelLive(login: string): Promise<boolean> {
-		const channelId = await this.getUserId(login);
-		if (!channelId) {
-			return false;
+		const stream = response.data?.user?.stream;
+		if (!stream) {
+			return null;
 		}
-		return this.isChannelLiveById(channelId);
+
+		return {
+			broadcastId: stream.id,
+			title: stream.title,
+			game: stream.game,
+			tags: (stream.freeformTags || []).map((t) => ({ localizedName: t.name })),
+			viewersCount: stream.viewersCount
+		};
 	}
 
 	async claimBonus(channelId: string, claimId: string): Promise<boolean> {

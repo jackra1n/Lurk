@@ -1,6 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { minerService } from '$lib/server/miner';
 import { getLogger } from '$lib/server/logger';
+import { eventStore } from '$lib/server/db/events';
 
 let initialized = false;
 const logger = getLogger('Hooks');
@@ -10,6 +11,7 @@ async function initializeMiner(): Promise<void> {
 	initialized = true;
 
 	logger.info('Initializing Twitch Points Miner...');
+	eventStore.initialize();
 
 	const result = await minerService.start();
 	if (result.success) {

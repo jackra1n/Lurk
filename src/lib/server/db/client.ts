@@ -14,7 +14,7 @@ const MIGRATIONS_DIR = join(process.cwd(), 'drizzle');
 mkdirSync(DATA_DIR, { recursive: true });
 
 const sqlite = new Database(DB_PATH, { create: true });
-sqlite.exec(`
+sqlite.run(`
 	PRAGMA journal_mode = WAL;
 	PRAGMA synchronous = NORMAL;
 	PRAGMA foreign_keys = ON;

@@ -79,12 +79,12 @@ const getPointsEarnedThisSession = () => {
 	return Number(row?.total ?? 0);
 };
 
-const getLatestBalanceByStreamerId = (streamerId: number, toMs: number) => {
+const getLatestBalanceByStreamerId = (streamerId: number) => {
 	const db = getDatabase();
 	const row = db
 		.select({ balance: balanceSamples.balance })
 		.from(balanceSamples)
-		.where(and(eq(balanceSamples.streamerId, streamerId), lte(balanceSamples.sampledAtMs, toMs)))
+		.where(eq(balanceSamples.streamerId, streamerId))
 		.orderBy(desc(balanceSamples.sampledAtMs))
 		.get();
 
@@ -165,13 +165,7 @@ export const getChannelPointsAnalytics = ({
 						lastActiveAtMs: sql<number | null>`max(${channelPointEvents.occurredAtMs})`
 					})
 					.from(channelPointEvents)
-					.where(
-						and(
-							inArray(channelPointEvents.streamerId, streamerIds),
-							gte(channelPointEvents.occurredAtMs, fromMs),
-							lte(channelPointEvents.occurredAtMs, toMs)
-						)
-					)
+					.where(inArray(channelPointEvents.streamerId, streamerIds))
 					.groupBy(channelPointEvents.streamerId)
 					.all()
 			: [];
@@ -193,7 +187,7 @@ export const getChannelPointsAnalytics = ({
 		return {
 			streamerId: streamer?.id ?? null,
 			login,
-			latestBalance: streamer ? getLatestBalanceByStreamerId(streamer.id, toMs) : 0,
+			latestBalance: streamer ? getLatestBalanceByStreamerId(streamer.id) : 0,
 			pointsEarned: aggregate?.pointsEarned ?? 0,
 			lastActiveAtMs: aggregate?.lastActiveAtMs ?? null
 		} satisfies StreamerAnalyticsItem;
@@ -201,7 +195,7 @@ export const getChannelPointsAnalytics = ({
 
 	items.sort((left, right) => {
 		if (sortBy === 'name') return compareByName(left.login, right.login, sortDir);
-		if (sortBy === 'points') return compareNumbers(left.pointsEarned, right.pointsEarned, sortDir);
+		if (sortBy === 'points') return compareNumbers(left.latestBalance, right.latestBalance, sortDir);
 		return compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir);
 	});
 

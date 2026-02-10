@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Calendar as CalendarPrimitive } from "bits-ui";
-	import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
+	import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
+	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import { buttonVariants, type ButtonVariant } from "$lib/components/ui/button/index.js";
 	import { cn } from "$lib/utils.js";
 
@@ -10,16 +10,16 @@
 		children,
 		variant = "ghost",
 		...restProps
-	}: CalendarPrimitive.PrevButtonProps & {
+	}: RangeCalendarPrimitive.NextButtonProps & {
 		variant?: ButtonVariant;
 	} = $props();
 </script>
 
 {#snippet Fallback()}
-	<ChevronLeftIcon class="size-4" />
+	<ChevronRightIcon class="size-4" />
 {/snippet}
 
-<CalendarPrimitive.PrevButton
+<RangeCalendarPrimitive.NextButton
 	bind:ref
 	class={cn(
 		buttonVariants({ variant }),

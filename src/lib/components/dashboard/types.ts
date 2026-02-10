@@ -18,3 +18,65 @@ export interface MinerStatusResponse {
 	reason: LifecycleReason;
 	configuredStreamers: string[];
 }
+
+export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive';
+export type SortDir = 'asc' | 'desc';
+
+export interface ChannelPointsControls {
+	sortBy: ChannelPointsSortBy;
+	sortDir: SortDir;
+	rangeFromMs: number;
+	rangeToMs: number;
+}
+
+export type ChannelPointsControlChange =
+	| {
+			type: 'sortBy';
+			value: ChannelPointsSortBy;
+	  }
+	| {
+			type: 'toggleSortDir';
+	  }
+	| {
+			type: 'selectStreamer';
+			login: string;
+	  }
+	| {
+			type: 'range';
+			fromMs: number;
+			toMs: number;
+	  };
+
+export interface StreamerAnalyticsItem {
+	streamerId: number | null;
+	login: string;
+	latestBalance: number;
+	pointsEarned: number;
+	lastActiveAtMs: number | null;
+}
+
+export interface ChannelPointSample {
+	timestampMs: number;
+	balance: number;
+}
+
+export interface ChannelPointsAnalyticsSummary {
+	trackedChannels: number;
+	pointsEarnedThisSession: number;
+}
+
+export interface ChannelPointsAnalyticsResponse {
+	success: boolean;
+	range: {
+		fromMs: number;
+		toMs: number;
+	};
+	sort: {
+		by: ChannelPointsSortBy;
+		dir: SortDir;
+	};
+	summary: ChannelPointsAnalyticsSummary;
+	streamers: StreamerAnalyticsItem[];
+	selectedStreamerLogin: string | null;
+	timeline: ChannelPointSample[];
+}

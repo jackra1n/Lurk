@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Calendar as CalendarPrimitive } from "bits-ui";
+	import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
 	import { cn, type WithoutChildrenOrChild } from "$lib/utils.js";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 
@@ -9,7 +9,7 @@
 		value,
 		onchange,
 		...restProps
-	}: WithoutChildrenOrChild<CalendarPrimitive.MonthSelectProps> = $props();
+	}: WithoutChildrenOrChild<RangeCalendarPrimitive.MonthSelectProps> = $props();
 </script>
 
 <span
@@ -18,11 +18,7 @@
 		className
 	)}
 >
-	<CalendarPrimitive.MonthSelect
-		bind:ref
-		class="dark:bg-popover dark:text-popover-foreground absolute inset-0 opacity-0"
-		{...restProps}
-	>
+	<RangeCalendarPrimitive.MonthSelect bind:ref class="absolute inset-0 opacity-0" {...restProps}>
 		{#snippet child({ props, monthItems, selectedMonthItem })}
 			<select {...props} {value} {onchange}>
 				{#each monthItems as monthItem (monthItem.value)}
@@ -44,5 +40,5 @@
 				<ChevronDownIcon class="size-4" />
 			</span>
 		{/snippet}
-	</CalendarPrimitive.MonthSelect>
+	</RangeCalendarPrimitive.MonthSelect>
 </span>

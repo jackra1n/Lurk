@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { Calendar as CalendarPrimitive } from "bits-ui";
+	import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
 	import { cn } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
 		class: className,
 		...restProps
-	}: CalendarPrimitive.HeadCellProps = $props();
+	}: RangeCalendarPrimitive.HeadCellProps = $props();
 </script>
 
-<CalendarPrimitive.HeadCell
+<RangeCalendarPrimitive.HeadCell
 	bind:ref
 	class={cn(
 		"text-muted-foreground w-(--cell-size) rounded-md text-[0.8rem] font-normal",

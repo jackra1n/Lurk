@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Calendar as CalendarPrimitive } from "bits-ui";
+	import { RangeCalendar as RangeCalendarPrimitive } from "bits-ui";
 	import { cn, type WithoutChildrenOrChild } from "$lib/utils.js";
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 
@@ -8,7 +8,7 @@
 		class: className,
 		value,
 		...restProps
-	}: WithoutChildrenOrChild<CalendarPrimitive.YearSelectProps> = $props();
+	}: WithoutChildrenOrChild<RangeCalendarPrimitive.YearSelectProps> = $props();
 </script>
 
 <span
@@ -17,11 +17,7 @@
 		className
 	)}
 >
-	<CalendarPrimitive.YearSelect
-		bind:ref
-		class="dark:bg-popover dark:text-popover-foreground absolute inset-0 opacity-0"
-		{...restProps}
-	>
+	<RangeCalendarPrimitive.YearSelect bind:ref class="absolute inset-0 opacity-0" {...restProps}>
 		{#snippet child({ props, yearItems, selectedYearItem })}
 			<select {...props} {value}>
 				{#each yearItems as yearItem (yearItem.value)}
@@ -43,5 +39,5 @@
 				<ChevronDownIcon class="size-4" />
 			</span>
 		{/snippet}
-	</CalendarPrimitive.YearSelect>
+	</RangeCalendarPrimitive.YearSelect>
 </span>

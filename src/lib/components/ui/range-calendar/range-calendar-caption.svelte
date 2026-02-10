@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { ComponentProps } from "svelte";
-	import type Calendar from "./calendar.svelte";
-	import CalendarMonthSelect from "./calendar-month-select.svelte";
-	import CalendarYearSelect from "./calendar-year-select.svelte";
+	import type RangeCalendar from "./range-calendar.svelte";
+	import RangeCalendarMonthSelect from "./range-calendar-month-select.svelte";
+	import RangeCalendarYearSelect from "./range-calendar-year-select.svelte";
 	import { DateFormatter, getLocalTimeZone, type DateValue } from "@internationalized/date";
 
 	let {
@@ -16,11 +16,11 @@
 		placeholder = $bindable(),
 		monthIndex = 0,
 	}: {
-		captionLayout: ComponentProps<typeof Calendar>["captionLayout"];
-		months: ComponentProps<typeof CalendarMonthSelect>["months"];
-		monthFormat: ComponentProps<typeof CalendarMonthSelect>["monthFormat"];
-		years: ComponentProps<typeof CalendarYearSelect>["years"];
-		yearFormat: ComponentProps<typeof CalendarYearSelect>["yearFormat"];
+		captionLayout: ComponentProps<typeof RangeCalendar>["captionLayout"];
+		months: ComponentProps<typeof RangeCalendarMonthSelect>["months"];
+		monthFormat: ComponentProps<typeof RangeCalendarMonthSelect>["monthFormat"];
+		years: ComponentProps<typeof RangeCalendarYearSelect>["years"];
+		yearFormat: ComponentProps<typeof RangeCalendarYearSelect>["yearFormat"];
 		month: DateValue;
 		placeholder: DateValue | undefined;
 		locale: string;
@@ -41,7 +41,7 @@
 </script>
 
 {#snippet MonthSelect()}
-	<CalendarMonthSelect
+	<RangeCalendarMonthSelect
 		{months}
 		{monthFormat}
 		value={month.month}
@@ -55,7 +55,7 @@
 {/snippet}
 
 {#snippet YearSelect()}
-	<CalendarYearSelect {years} {yearFormat} value={month.year} />
+	<RangeCalendarYearSelect {years} {yearFormat} value={month.year} />
 {/snippet}
 
 {#if captionLayout === "dropdown"}

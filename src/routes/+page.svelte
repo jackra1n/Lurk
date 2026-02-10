@@ -10,6 +10,8 @@
 	import type {
 		AuthStatusResponse,
 		ChannelPointsAnalyticsResponse,
+		ChannelPointsControlChange,
+		ChannelPointsControls,
 		ChannelPointsSortBy,
 		LifecycleReason,
 		MinerLifecycle,
@@ -58,6 +60,12 @@
 	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
 	let selectedStreamerLogin = $state<string | null>(null);
 	let pollIntervalMs = $state(slowPollMs);
+	let analyticsControls = $derived({
+		sortBy: analyticsSortBy,
+		sortDir: analyticsSortDir,
+		rangeFromMs: analyticsRangeFromMs,
+		rangeToMs: analyticsRangeToMs
+	} satisfies ChannelPointsControls);
 
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 	let autoStartAttempted = false;
@@ -290,24 +298,30 @@
 		}
 	};
 
-	const setAnalyticsSortBy = async (value: ChannelPointsSortBy) => {
-		analyticsSortBy = value;
-		await refreshAnalytics(true);
-	};
+	const handleChannelPointsControlChange = async (change: ChannelPointsControlChange) => {
+		if (change.type === 'sortBy') {
+			if (analyticsSortBy === change.value) return;
+			analyticsSortBy = change.value;
+			await refreshAnalytics(true);
+			return;
+		}
 
-	const toggleAnalyticsSortDir = async () => {
-		analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
-		await refreshAnalytics(true);
-	};
+		if (change.type === 'toggleSortDir') {
+			analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
+			await refreshAnalytics(true);
+			return;
+		}
 
-	const setSelectedStreamer = async (login: string) => {
-		selectedStreamerLogin = login;
-		await refreshAnalytics(true);
-	};
+		if (change.type === 'selectStreamer') {
+			if (selectedStreamerLogin === change.login) return;
+			selectedStreamerLogin = change.login;
+			await refreshAnalytics(true);
+			return;
+		}
 
-	const setAnalyticsRange = async (fromMs: number, toMs: number) => {
-		analyticsRangeFromMs = fromMs;
-		analyticsRangeToMs = toMs;
+		if (analyticsRangeFromMs === change.fromMs && analyticsRangeToMs === change.toMs) return;
+		analyticsRangeFromMs = change.fromMs;
+		analyticsRangeToMs = change.toMs;
 		await refreshAnalytics(true);
 	};
 </script>
@@ -354,14 +368,8 @@
 				{analytics}
 				loading={analyticsLoading}
 				errorMessage={analyticsErrorMessage}
-				sortBy={analyticsSortBy}
-				sortDir={analyticsSortDir}
-				rangeFromMs={analyticsRangeFromMs}
-				rangeToMs={analyticsRangeToMs}
-				onSortByChange={setAnalyticsSortBy}
-				onToggleSortDir={toggleAnalyticsSortDir}
-				onSelectStreamer={setSelectedStreamer}
-				onRangeApply={setAnalyticsRange}
+				controls={analyticsControls}
+				onControlChange={handleChannelPointsControlChange}
 			/>
 		</section>
 

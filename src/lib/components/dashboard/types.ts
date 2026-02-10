@@ -22,6 +22,31 @@ export interface MinerStatusResponse {
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive';
 export type SortDir = 'asc' | 'desc';
 
+export interface ChannelPointsControls {
+	sortBy: ChannelPointsSortBy;
+	sortDir: SortDir;
+	rangeFromMs: number;
+	rangeToMs: number;
+}
+
+export type ChannelPointsControlChange =
+	| {
+			type: 'sortBy';
+			value: ChannelPointsSortBy;
+	  }
+	| {
+			type: 'toggleSortDir';
+	  }
+	| {
+			type: 'selectStreamer';
+			login: string;
+	  }
+	| {
+			type: 'range';
+			fromMs: number;
+			toMs: number;
+	  };
+
 export interface StreamerAnalyticsItem {
 	streamerId: number | null;
 	login: string;

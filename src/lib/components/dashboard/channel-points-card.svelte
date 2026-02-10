@@ -16,34 +16,23 @@
 	import * as Select from '$lib/components/ui/select';
 	import type {
 		ChannelPointsAnalyticsResponse,
+		ChannelPointsControlChange,
+		ChannelPointsControls,
 		ChannelPointsSortBy,
-		SortDir
 	} from './types';
 
 	let {
 		analytics,
 		loading = false,
 		errorMessage = null,
-		sortBy,
-		sortDir,
-		rangeFromMs,
-		rangeToMs,
-		onSortByChange,
-		onToggleSortDir,
-		onSelectStreamer,
-		onRangeApply
+		controls,
+		onControlChange
 	}: {
 		analytics: ChannelPointsAnalyticsResponse | null;
 		loading?: boolean;
 		errorMessage?: string | null;
-		sortBy: ChannelPointsSortBy;
-		sortDir: SortDir;
-		rangeFromMs: number;
-		rangeToMs: number;
-		onSortByChange: (value: ChannelPointsSortBy) => void | Promise<void>;
-		onToggleSortDir: () => void | Promise<void>;
-		onSelectStreamer: (login: string) => void | Promise<void>;
-		onRangeApply: (fromMs: number, toMs: number) => void | Promise<void>;
+		controls: ChannelPointsControls;
+		onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
 	} = $props();
 
 	let rangeOpen = $state(false);
@@ -56,6 +45,12 @@
 			color: 'var(--chart-1)'
 		}
 	} satisfies ChartConfig;
+	const sortOptions: ChannelPointsSortBy[] = ['lastActive', 'name', 'points'];
+	const sortLabels = {
+		lastActive: 'Last Active',
+		name: 'Name',
+		points: 'Points'
+	} satisfies Record<ChannelPointsSortBy, string>;
 
 	const asDateTimeLocal = (valueMs: number) => {
 		const offsetMs = new Date(valueMs).getTimezoneOffset() * 60_000;
@@ -75,10 +70,11 @@
 		if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
 		return `${Math.floor(diffMs / 86_400_000)}d ago`;
 	};
+	const isMultiDayRange = $derived(controls.rangeToMs - controls.rangeFromMs > 24 * 60 * 60 * 1000);
 
 	const openRangeEditor = () => {
-		fromInput = asDateTimeLocal(rangeFromMs);
-		toInput = asDateTimeLocal(rangeToMs);
+		fromInput = asDateTimeLocal(controls.rangeFromMs);
+		toInput = asDateTimeLocal(controls.rangeToMs);
 		rangeOpen = true;
 	};
 
@@ -86,24 +82,8 @@
 		const nextFrom = asTimestamp(fromInput);
 		const nextTo = asTimestamp(toInput);
 		if (nextFrom === null || nextTo === null || nextFrom > nextTo) return;
-		onRangeApply(nextFrom, nextTo);
+		onControlChange({ type: 'range', fromMs: nextFrom, toMs: nextTo });
 		rangeOpen = false;
-	};
-
-	const sortLabel = (value: ChannelPointsSortBy) => {
-		if (value === 'points') return 'Points';
-		if (value === 'lastActive') return 'Last Active';
-		return 'Name';
-	};
-
-	const handleSortValueChange = (value: string) => {
-		if (value === sortBy) return;
-		onSortByChange(value as ChannelPointsSortBy);
-	};
-
-	const handleSortItemPointerDown = (value: ChannelPointsSortBy) => {
-		if (value !== sortBy) return;
-		onToggleSortDir();
 	};
 
 	const chartYDomain = $derived.by<[number, number]>(() => {
@@ -125,10 +105,8 @@
 	const formatXAxisTick = (value: unknown) => {
 		const date = value instanceof Date ? value : new Date(value as string | number);
 		if (Number.isNaN(date.getTime())) return '';
-
-		const showDate = rangeToMs - rangeFromMs > 24 * 60 * 60 * 1000;
 		return date.toLocaleString('de-DE', {
-			...(showDate ? { day: '2-digit', month: '2-digit' } : {}),
+			...(isMultiDayRange ? { day: '2-digit', month: '2-digit' } : {}),
 			hour: '2-digit',
 			minute: '2-digit',
 			hour12: false
@@ -158,7 +136,7 @@
 						onclick={openRangeEditor}
 					>
 						<CalendarRange class="size-4" />
-						{new Date(rangeFromMs).toLocaleDateString('de-DE')} - {new Date(rangeToMs).toLocaleDateString('de-DE')}
+						{new Date(controls.rangeFromMs).toLocaleDateString('de-DE')} - {new Date(controls.rangeToMs).toLocaleDateString('de-DE')}
 					</Popover.Trigger>
 					<Popover.Content class="w-80 space-y-3">
 						<div class="space-y-2">
@@ -204,25 +182,35 @@
 		{:else}
 			<div class="grid gap-3 lg:grid-cols-[240px_1fr]">
 				<div class="space-y-2">
-					<Select.Root type="single" value={sortBy} onValueChange={handleSortValueChange}>
+					<Select.Root
+						type="single"
+						value={controls.sortBy}
+						onValueChange={(value) => {
+							if (value === controls.sortBy) return;
+							onControlChange({ type: 'sortBy', value: value as ChannelPointsSortBy });
+						}}
+					>
 						<Select.Trigger size="sm" class="w-full">
 							<span data-slot="select-value">
-								{#if sortDir === 'asc'}
+								{#if controls.sortDir === 'asc'}
 									<ArrowUp class="size-3.5" />
 								{:else}
 									<ArrowDown class="size-3.5" />
 								{/if}
-								{sortLabel(sortBy)}
+								{sortLabels[controls.sortBy]}
 							</span>
 						</Select.Trigger>
 						<Select.Content>
-							{#each ['lastActive', 'name', 'points'] as key (key)}
+							{#each sortOptions as key (key)}
 								<Select.Item
 									value={key}
-									label={sortLabel(key as ChannelPointsSortBy)}
-									onpointerdown={() => handleSortItemPointerDown(key as ChannelPointsSortBy)}
+									label={sortLabels[key]}
+									onpointerdown={() => {
+										if (key !== controls.sortBy) return;
+										onControlChange({ type: 'toggleSortDir' });
+									}}
 								>
-									{sortLabel(key as ChannelPointsSortBy)}
+									{sortLabels[key]}
 								</Select.Item>
 							{/each}
 						</Select.Content>
@@ -238,7 +226,7 @@
 											? 'border-primary/50 bg-primary/10'
 											: 'border-border/70 bg-background/50 hover:bg-accent'
 									}`}
-									onclick={() => onSelectStreamer(streamer.login)}
+									onclick={() => onControlChange({ type: 'selectStreamer', login: streamer.login })}
 								>
 									<p class="text-sm font-medium">{streamer.login}</p>
 									<p class="text-xs text-muted-foreground">
@@ -293,9 +281,8 @@
 									<ChartTooltip
 										labelFormatter={(value) => {
 											const date = value instanceof Date ? value : new Date(value);
-											const showDate = rangeToMs - rangeFromMs > 24 * 60 * 60 * 1000;
 											return date.toLocaleString('de-DE', {
-												...(showDate ? { day: '2-digit', month: '2-digit', year: 'numeric' } : {}),
+												...(isMultiDayRange ? { day: '2-digit', month: '2-digit', year: 'numeric' } : {}),
 												hour: '2-digit',
 												minute: '2-digit',
 												hour12: false

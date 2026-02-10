@@ -7,30 +7,45 @@ import { eventStore } from './db/events';
 
 const logger = getLogger('Miner');
 
+export interface StreamData {
+	broadcastId: string | null;
+	title: string | null;
+	game: string | null;
+	viewers: number;
+	spadeUrl: string | null;
+	streamUpAt: number; // PubSub stream-up timestamp, 0 = unset
+	onlineAt: number; // confirmed online, used for 30-second grace period
+	minuteWatched: number;
+	minuteWatchedTimestamp: number;
+	watchStreakMissing: boolean;
+}
+
+export function createDefaultStreamData(): StreamData {
+	return {
+		broadcastId: null,
+		title: null,
+		game: null,
+		viewers: 0,
+		spadeUrl: null,
+		streamUpAt: 0,
+		onlineAt: 0,
+		minuteWatched: 0,
+		minuteWatchedTimestamp: 0,
+		watchStreakMissing: false
+	};
+}
+
 export interface StreamerState {
 	name: string;
 	channelId: string | null;
 	isLive: boolean;
 	channelPoints: number;
 	startingPoints: number | null;
-	// Stream metadata
-	title: string | null;
-	game: string | null;
-	viewers: number;
-	broadcastId: string | null;
-	spadeUrl: string | null;
-	// Timestamps
-	streamUpAt: number; // PubSub stream-up timestamp, 0 = never
-	onlineAt: number; // confirmed online, used for 30-second grace period
 	offlineAt: number; // confirmed offline, used for 60-second debounce
 	lastContextRefresh: number; // epoch ms
-	// Watch tracking
-	minuteWatched: number;
-	minuteWatchedTimestamp: number;
-	watchStreakMissing: boolean;
-	// Multipliers & history
 	activeMultipliers: { factor: number }[];
 	history: Record<string, { counter: number; amount: number }>;
+	stream: StreamData;
 }
 
 export interface MinerStatus {
@@ -306,27 +321,18 @@ class MinerService {
 				// Get channel ID via GraphQL
 				const channelId = await twitchClient.getUserId(name);
 
-				this.streamerStates.set(name, {
-					name,
-					channelId,
-					isLive: false,
-					channelPoints: 0,
-					startingPoints: null,
-					title: null,
-					game: null,
-					viewers: 0,
-					broadcastId: null,
-					spadeUrl: null,
-					streamUpAt: 0,
-					onlineAt: 0,
-					offlineAt: 0,
-					lastContextRefresh: 0,
-					minuteWatched: 0,
-					minuteWatchedTimestamp: 0,
-					watchStreakMissing: false,
-					activeMultipliers: [],
-					history: {}
-				});
+			this.streamerStates.set(name, {
+				name,
+				channelId,
+				isLive: false,
+				channelPoints: 0,
+				startingPoints: null,
+				offlineAt: 0,
+				lastContextRefresh: 0,
+				activeMultipliers: [],
+				history: {},
+				stream: createDefaultStreamData()
+			});
 
 				if (!channelId) {
 					logger.warn({ streamer: name }, 'Could not get channel ID');
@@ -457,9 +463,9 @@ class MinerService {
 			if (streamer) {
 				streamer.channelPoints = balance.balance;
 
-				if (point_gain.reason_code === 'WATCH_STREAK') {
-					streamer.watchStreakMissing = false;
-				}
+			if (point_gain.reason_code === 'WATCH_STREAK') {
+				streamer.stream.watchStreakMissing = false;
+			}
 
 				const key = point_gain.reason_code;
 				if (!streamer.history[key]) {
@@ -481,14 +487,11 @@ class MinerService {
 
 		if (messageType === VideoPlaybackMessageType.StreamUp) {
 			// record timestamp but do NOT mark live yet -- wait for viewcount verification
-			streamer.streamUpAt = Date.now();
+			streamer.stream.streamUpAt = Date.now();
 			logger.debug({ streamer: streamer.name }, 'stream-up received, waiting for verification');
 		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 			const wasLive = streamer.isLive;
-			const previousTitle = streamer.title;
-			const previousGame = streamer.game;
-			const previousViewers = streamer.viewers;
-			const previousBroadcastId = streamer.broadcastId;
+			const { title: previousTitle, game: previousGame, viewers: previousViewers, broadcastId: previousBroadcastId } = streamer.stream;
 
 			if (streamer.isLive) {
 				logger.info({ streamer: streamer.name }, 'Streamer went OFFLINE');
@@ -514,21 +517,17 @@ class MinerService {
 
 			streamer.isLive = false;
 			streamer.offlineAt = Date.now();
-			streamer.watchStreakMissing = false;
-			streamer.title = null;
-			streamer.game = null;
-			streamer.viewers = 0;
-			streamer.broadcastId = null;
+			streamer.stream = createDefaultStreamData();
 		} else if (messageType === VideoPlaybackMessageType.Viewcount) {
 			// update viewer count from PubSub data
 			const viewData = data as { viewers?: number };
 			if (viewData.viewers !== undefined) {
-				streamer.viewers = viewData.viewers;
+				streamer.stream.viewers = viewData.viewers;
 			}
 
 			if (
 				!streamer.isLive &&
-				Date.now() - streamer.streamUpAt > 2 * 60_000
+				Date.now() - streamer.stream.streamUpAt > 2 * 60_000
 			) {
 				this.checkStreamerOnline(streamer).catch((err) => {
 					logger.error({ err, streamer: streamer.name }, 'Failed to check streamer online');
@@ -552,10 +551,10 @@ class MinerService {
 			const wasOffline = !state.isLive;
 			if (wasOffline) {
 				state.isLive = true;
-				state.onlineAt = Date.now();
-				state.watchStreakMissing = true;
-				state.minuteWatched = 0;
-				state.minuteWatchedTimestamp = 0;
+				state.stream.onlineAt = Date.now();
+				state.stream.watchStreakMissing = true;
+				state.stream.minuteWatched = 0;
+				state.stream.minuteWatchedTimestamp = 0;
 				this.withEventStore('stream_up_gql', () => {
 					eventStore.recordEvent({
 						streamer: {
@@ -564,33 +563,30 @@ class MinerService {
 						},
 						eventType: 'stream_up',
 						source: 'gql_stream',
-						broadcastId: state.broadcastId,
-						title: state.title,
-						gameName: state.game,
-						viewersCount: state.viewers
+						broadcastId: state.stream.broadcastId,
+						title: state.stream.title,
+						gameName: state.stream.game,
+						viewersCount: state.stream.viewers
 					});
 				});
 				logger.info(
-					{ streamer: state.name, title: state.title, game: state.game, viewers: state.viewers },
+					{ streamer: state.name, title: state.stream.title, game: state.stream.game, viewers: state.stream.viewers },
 					'Streamer went LIVE'
 				);
 			}
 
 			// fetch spade URL if we don't have one (needed for minute-watched)
-			if (!state.spadeUrl) {
+			if (!state.stream.spadeUrl) {
 				const spadeUrl = await twitchClient.getSpadeUrl(state.name);
 				if (spadeUrl) {
-					state.spadeUrl = spadeUrl;
+					state.stream.spadeUrl = spadeUrl;
 				} else {
 					logger.warn({ streamer: state.name }, 'Could not fetch spade URL');
 				}
 			}
 		} else {
 			if (state.isLive) {
-				const previousTitle = state.title;
-				const previousGame = state.game;
-				const previousViewers = state.viewers;
-				const previousBroadcastId = state.broadcastId;
+				const { title: previousTitle, game: previousGame, viewers: previousViewers, broadcastId: previousBroadcastId } = state.stream;
 				state.isLive = false;
 				state.offlineAt = Date.now();
 				this.withEventStore('stream_down_gql', () => {
@@ -609,19 +605,15 @@ class MinerService {
 				});
 				logger.info({ streamer: state.name }, 'Streamer went OFFLINE (verified via API)');
 			}
-			state.title = null;
-			state.game = null;
-			state.viewers = 0;
-			state.broadcastId = null;
-			state.spadeUrl = null;
+			state.stream = createDefaultStreamData();
 		}
 	}
 
 	private applyStreamInfo(state: StreamerState, info: StreamInfo): void {
-		state.broadcastId = info.broadcastId;
-		state.title = info.title;
-		state.game = info.game?.displayName ?? null;
-		state.viewers = info.viewersCount;
+		state.stream.broadcastId = info.broadcastId;
+		state.stream.title = info.title;
+		state.stream.game = info.game?.displayName ?? null;
+		state.stream.viewers = info.viewersCount;
 	}
 
 	private async claimBonus(
@@ -748,9 +740,9 @@ class MinerService {
 			if (
 				state.isLive &&
 				state.channelId &&
-				state.broadcastId &&
-				state.spadeUrl &&
-				(state.onlineAt === 0 || now - state.onlineAt > 30_000)
+				state.stream.broadcastId &&
+				state.stream.spadeUrl &&
+				(state.stream.onlineAt === 0 || now - state.stream.onlineAt > 30_000)
 			) {
 				eligible.push(state);
 			}
@@ -793,7 +785,7 @@ class MinerService {
 
 		for (let i = 0; i < selected.length; i++) {
 			const state = selected[i];
-			if (!state.channelId || !state.broadcastId || !state.spadeUrl) continue;
+			if (!state.channelId || !state.stream.broadcastId || !state.stream.spadeUrl) continue;
 
 			try {
 				const token = await twitchClient.getPlaybackAccessToken(state.name);
@@ -814,17 +806,17 @@ class MinerService {
 
 				const payload = encodeMinuteWatchedPayload(
 					state.channelId,
-					state.broadcastId,
+					state.stream.broadcastId,
 					this.userId,
 					state.name
 				);
 
-				const success = await twitchClient.sendMinuteWatchedEvent(state.spadeUrl, payload);
+				const success = await twitchClient.sendMinuteWatchedEvent(state.stream.spadeUrl, payload);
 				if (success) {
-					if (state.minuteWatchedTimestamp > 0) {
-						state.minuteWatched += (now - state.minuteWatchedTimestamp) / 60_000;
+					if (state.stream.minuteWatchedTimestamp > 0) {
+						state.stream.minuteWatched += (now - state.stream.minuteWatchedTimestamp) / 60_000;
 					}
-					state.minuteWatchedTimestamp = now;
+					state.stream.minuteWatchedTimestamp = now;
 					this.withEventStore('minute_watched_tick', () => {
 						eventStore.recordEvent({
 							streamer: {
@@ -833,16 +825,16 @@ class MinerService {
 							},
 							eventType: 'minute_watched_tick',
 							source: 'spade',
-							broadcastId: state.broadcastId,
-							viewersCount: state.viewers,
+							broadcastId: state.stream.broadcastId,
+							viewersCount: state.stream.viewers,
 							payload: {
 								success: true,
-								minuteWatched: Number(state.minuteWatched.toFixed(2))
+								minuteWatched: Number(state.stream.minuteWatched.toFixed(2))
 							}
 						});
 					});
 					logger.debug(
-						{ streamer: state.name, minuteWatched: state.minuteWatched.toFixed(2) },
+						{ streamer: state.name, minuteWatched: state.stream.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'
 					);
 				} else {
@@ -854,8 +846,8 @@ class MinerService {
 							},
 							eventType: 'minute_watched_tick',
 							source: 'spade',
-							broadcastId: state.broadcastId,
-							viewersCount: state.viewers,
+							broadcastId: state.stream.broadcastId,
+							viewersCount: state.stream.viewers,
 							payload: {
 								success: false
 							}

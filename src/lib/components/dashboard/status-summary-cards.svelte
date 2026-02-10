@@ -1,20 +1,14 @@
 <script lang="ts">
 	import { Card, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import type { AuthStatusResponse, MinerStatusResponse } from './types';
+	import type { ChannelPointsAnalyticsSummary, MinerStatusResponse } from './types';
 
 	let {
-		authStatus,
-		minerStatus
+		minerStatus,
+		summary
 	}: {
-		authStatus: AuthStatusResponse;
 		minerStatus: MinerStatusResponse;
+		summary: ChannelPointsAnalyticsSummary | null;
 	} = $props();
-
-	const authLabel = () => {
-		if (authStatus.authenticated) return 'Connected';
-		if (authStatus.pendingLogin) return 'Awaiting Confirmation';
-		return 'Not Connected';
-	};
 
 	const minerLabel = () => {
 		if (minerStatus.running) return 'Running';
@@ -35,12 +29,6 @@
 		if (minerStatus.running) return 'bg-emerald-500';
 		if (minerStatus.lifecycle === 'authenticating') return 'bg-amber-400';
 		if (minerStatus.lifecycle === 'ready') return 'bg-amber-400';
-		return 'bg-red-500';
-	};
-
-	const authStatusDotClass = () => {
-		if (authStatus.authenticated) return 'bg-emerald-500';
-		if (authStatus.pendingLogin) return 'bg-amber-400';
 		return 'bg-red-500';
 	};
 
@@ -69,18 +57,16 @@
 
 	<Card class="bg-card/80">
 		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Auth Status</p>
-			<div class="flex items-center gap-2">
-				<span class={`size-2.5 rounded-full ${authStatusDotClass()}`} aria-hidden="true"></span>
-				<CardTitle class="text-2xl">{authLabel()}</CardTitle>
-			</div>
+			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Tracked Channels</p>
+			<CardTitle class="text-2xl">{summary?.trackedChannels ?? minerStatus.configuredStreamers.length}</CardTitle>
 		</CardHeader>
 	</Card>
 
 	<Card class="bg-card/80">
 		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Tracked Streamers</p>
-			<CardTitle class="text-2xl">{minerStatus.configuredStreamers.length}</CardTitle>
+			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Points Earned This Session</p>
+			<CardTitle class="text-2xl">+{(summary?.pointsEarnedThisSession ?? 0).toLocaleString()}</CardTitle>
+			<CardDescription class="text-sm">Total from active run.</CardDescription>
 		</CardHeader>
 	</Card>
 </section>

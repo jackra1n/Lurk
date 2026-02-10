@@ -3,15 +3,20 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import Sun from '@lucide/svelte/icons/sun';
 	import { Button } from '$lib/components/ui/button';
-	import AuthenticationCard from '$lib/components/dashboard/authentication-card.svelte';
+	import ChannelPointsCard from '$lib/components/dashboard/channel-points-card.svelte';
 	import QuickActionsCard from '$lib/components/dashboard/quick-actions-card.svelte';
 	import StatusSummaryCards from '$lib/components/dashboard/status-summary-cards.svelte';
-	import TrackedStreamersCard from '$lib/components/dashboard/tracked-streamers-card.svelte';
+	import TopbarAuthControl from '$lib/components/dashboard/topbar-auth-control.svelte';
 	import type {
 		AuthStatusResponse,
+		ChannelPointsAnalyticsResponse,
+		ChannelPointsControlChange,
+		ChannelPointsControls,
+		ChannelPointsSortBy,
 		LifecycleReason,
 		MinerLifecycle,
-		MinerStatusResponse
+		MinerStatusResponse,
+		SortDir
 	} from '$lib/components/dashboard/types';
 
 	const themeStorageKey = 'theme';
@@ -19,6 +24,8 @@
 	const slowPollMs = 10000;
 	const lifecycleValues: MinerLifecycle[] = ['running', 'ready', 'auth_required', 'authenticating', 'error'];
 	const reasonValues: Exclude<LifecycleReason, null>[] = ['missing_token', 'invalid_token', 'auth_pending', 'startup_failed'];
+	const defaultAnalyticsRangeMs = 24 * 60 * 60 * 1000;
+	const initialAnalyticsRangeToMs = Date.now();
 
 	const defaultAuthStatus: AuthStatusResponse = {
 		authenticated: false,
@@ -41,11 +48,26 @@
 	let isDark = $state(true);
 	let authStatus = $state<AuthStatusResponse>(defaultAuthStatus);
 	let minerStatus = $state<MinerStatusResponse>(defaultMinerStatus);
-	let loadingAuthAction = $state(false);
 	let loadingStartAfterAuth = $state(false);
 	let message = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
+	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
+	let analyticsLoading = $state(false);
+	let analyticsErrorMessage = $state<string | null>(null);
+	let analyticsSortBy = $state<ChannelPointsSortBy>('lastActive');
+	let analyticsSortDir = $state<SortDir>('desc');
+	let analyticsRangeToMs = $state(initialAnalyticsRangeToMs);
+	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
+	let selectedStreamerLogin = $state<string | null>(null);
 	let pollIntervalMs = $state(slowPollMs);
+	let analyticsControls = $derived({
+		sortBy: analyticsSortBy,
+		sortDir: analyticsSortDir,
+		rangeFromMs: analyticsRangeFromMs,
+		rangeToMs: analyticsRangeToMs
+	} satisfies ChannelPointsControls);
+	let analyticsRequestSeq = 0;
+	let analyticsLoadingRequestSeq = 0;
 
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 	let autoStartAttempted = false;
@@ -151,6 +173,55 @@
 		} satisfies MinerStatusResponse;
 	};
 
+	const fetchChannelPointsAnalytics = async () => {
+		const query = new URLSearchParams({
+			from: String(analyticsRangeFromMs),
+			to: String(analyticsRangeToMs),
+			sortBy: analyticsSortBy,
+			sortDir: analyticsSortDir
+		});
+
+		if (selectedStreamerLogin) {
+			query.set('selectedStreamer', selectedStreamerLogin);
+		}
+
+		const response = await fetch(`/api/dashboard/channel-points?${query.toString()}`);
+		const payload = await readJson(response);
+
+		if (
+			!response.ok ||
+			!payload ||
+			typeof payload !== 'object' ||
+			!(payload as { success?: unknown }).success
+		) {
+			throw new Error(getErrorMessage(payload, 'Failed to fetch channel points analytics'));
+		}
+
+		return payload as ChannelPointsAnalyticsResponse;
+	};
+
+	const refreshAnalytics = async (showLoading = false) => {
+		const requestSeq = ++analyticsRequestSeq;
+		if (showLoading) {
+			analyticsLoading = true;
+			analyticsLoadingRequestSeq = requestSeq;
+		}
+
+		try {
+			const nextAnalytics = await fetchChannelPointsAnalytics();
+			if (requestSeq !== analyticsRequestSeq) return;
+			analytics = nextAnalytics;
+			selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
+			analyticsErrorMessage = null;
+		} catch (error) {
+			if (requestSeq !== analyticsRequestSeq) return;
+			analyticsErrorMessage =
+				error instanceof Error ? error.message : 'Failed to fetch channel points analytics';
+		} finally {
+			if (showLoading && requestSeq === analyticsLoadingRequestSeq) analyticsLoading = false;
+		}
+	};
+
 	const getDesiredPollInterval = () =>
 		authStatus.pendingLogin || minerStatus.lifecycle === 'authenticating' ? fastPollMs : slowPollMs;
 
@@ -176,6 +247,7 @@
 
 		authStatus = nextAuthStatus;
 		minerStatus = nextMinerStatus;
+		await refreshAnalytics();
 
 		if (!nextAuthStatus.authenticated) {
 			autoStartAttempted = false;
@@ -193,23 +265,6 @@
 			message = 'Authentication complete. Starting miner...';
 			await startMinerAfterAuth();
 		}
-	};
-
-	const postAuthAction = async (action: 'startLogin' | 'cancelLogin' | 'logout') => {
-		const response = await fetch('/api/auth', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ action })
-		});
-		const payload = await readJson(response);
-
-		if (!response.ok || !(payload && typeof payload === 'object' && (payload as { success?: unknown }).success)) {
-			throw new Error(getErrorMessage(payload, `Failed to ${action}`));
-		}
-
-		return payload;
 	};
 
 	const startMinerAfterAuth = async () => {
@@ -243,54 +298,39 @@
 		}
 	};
 
-	const startLogin = async () => {
-		loadingAuthAction = true;
-		errorMessage = null;
-		message = null;
-
+	const refreshStatusAfterAuthAction = async () => {
 		try {
-			autoStartAttempted = false;
-			await postAuthAction('startLogin');
-			message = 'Enter the code on Twitch to complete login.';
 			await refreshAllStatus({ autoStart: false });
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Failed to start login';
-		} finally {
-			loadingAuthAction = false;
+			errorMessage = error instanceof Error ? error.message : 'Failed to refresh status';
 		}
 	};
 
-	const cancelLogin = async () => {
-		loadingAuthAction = true;
-		errorMessage = null;
-		message = null;
-
-		try {
-			await postAuthAction('cancelLogin');
-			message = 'Login cancelled.';
-			await refreshAllStatus({ autoStart: false });
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Failed to cancel login';
-		} finally {
-			loadingAuthAction = false;
+	const handleChannelPointsControlChange = async (change: ChannelPointsControlChange) => {
+		if (change.type === 'sortBy') {
+			if (analyticsSortBy === change.value) return;
+			analyticsSortBy = change.value;
+			await refreshAnalytics(true);
+			return;
 		}
-	};
 
-	const logout = async () => {
-		loadingAuthAction = true;
-		errorMessage = null;
-		message = null;
-
-		try {
-			autoStartAttempted = false;
-			await postAuthAction('logout');
-			message = 'Logged out.';
-			await refreshAllStatus({ autoStart: false });
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Failed to logout';
-		} finally {
-			loadingAuthAction = false;
+		if (change.type === 'toggleSortDir') {
+			analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
+			await refreshAnalytics(true);
+			return;
 		}
+
+		if (change.type === 'selectStreamer') {
+			if (selectedStreamerLogin === change.login) return;
+			selectedStreamerLogin = change.login;
+			await refreshAnalytics(true);
+			return;
+		}
+
+		if (analyticsRangeFromMs === change.fromMs && analyticsRangeToMs === change.toMs) return;
+		analyticsRangeFromMs = change.fromMs;
+		analyticsRangeToMs = change.toMs;
+		await refreshAnalytics(true);
 	};
 </script>
 
@@ -302,34 +342,42 @@
 	<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
 		<header class="flex items-center justify-between gap-3">
 			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Lurk</h1>
-			<Button type="button" variant="outline" size="sm" onclick={toggleTheme}>
-				{#if isDark}
-					<Moon class="size-4" />
-				{:else}
-					<Sun class="size-4" />
-				{/if}
-				{isDark ? 'Dark' : 'Light'}
-			</Button>
+			<div class="flex items-center gap-2">
+				<TopbarAuthControl
+					{authStatus}
+					{loadingStartAfterAuth}
+					onAuthStatusChange={refreshStatusAfterAuthAction}
+				/>
+				<Button type="button" variant="outline" size="sm" onclick={toggleTheme}>
+					{#if isDark}
+						<Moon class="size-4" />
+					{:else}
+						<Sun class="size-4" />
+					{/if}
+					{isDark ? 'Dark' : 'Light'}
+				</Button>
+			</div>
 		</header>
 
-		<StatusSummaryCards
-			{authStatus}
-			{minerStatus}
-		/>
-
-		<section class="grid gap-4 lg:grid-cols-[2fr_1fr]">
-			<TrackedStreamersCard trackedStreamerCount={minerStatus.configuredStreamers.length} />
-
-			<AuthenticationCard
-				{authStatus}
-				minerReason={minerStatus.reason}
+		{#if errorMessage}
+			<p class="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 				{errorMessage}
+			</p>
+		{:else if message}
+			<p class="rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
 				{message}
-				{loadingAuthAction}
-				{loadingStartAfterAuth}
-				onStartLogin={startLogin}
-				onCancelLogin={cancelLogin}
-				onLogout={logout}
+			</p>
+		{/if}
+
+		<StatusSummaryCards {minerStatus} summary={analytics?.summary ?? null} />
+
+		<section>
+			<ChannelPointsCard
+				{analytics}
+				loading={analyticsLoading}
+				errorMessage={analyticsErrorMessage}
+				controls={analyticsControls}
+				onControlChange={handleChannelPointsControlChange}
 			/>
 		</section>
 

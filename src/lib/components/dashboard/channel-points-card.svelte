@@ -1,18 +1,14 @@
 <script lang="ts">
-	import CalendarRange from '@lucide/svelte/icons/calendar-range';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import { scaleUtc } from 'd3-scale';
 	import { curveLinear } from 'd3-shape';
 	import { Area, AreaChart, LinearGradient } from 'layerchart';
-	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import ChannelPointsRangeSelector from './channel-points-range-selector.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import type { ChartConfig } from '$lib/components/ui/chart';
 	import { ChartContainer, ChartTooltip } from '$lib/components/ui/chart';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Popover from '$lib/components/ui/popover';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Select from '$lib/components/ui/select';
 	import type {
@@ -36,10 +32,6 @@
 		onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
 	} = $props();
 
-	let rangeOpen = $state(false);
-	let fromInput = $state('');
-	let toInput = $state('');
-
 	const chartConfig = {
 		balance: {
 			label: 'Channel Points',
@@ -53,16 +45,6 @@
 		points: 'Points'
 	} satisfies Record<ChannelPointsSortBy, string>;
 
-	const asDateTimeLocal = (valueMs: number) => {
-		const offsetMs = new Date(valueMs).getTimezoneOffset() * 60_000;
-		return new Date(valueMs - offsetMs).toISOString().slice(0, 16);
-	};
-
-	const asTimestamp = (value: string) => {
-		const result = new Date(value).getTime();
-		return Number.isFinite(result) ? result : null;
-	};
-
 	const relativeTime = (timestampMs: number | null) => {
 		if (!timestampMs) return 'never';
 		const diffMs = Date.now() - timestampMs;
@@ -72,20 +54,6 @@
 		return `${Math.floor(diffMs / 86_400_000)}d ago`;
 	};
 	const isMultiDayRange = $derived(controls.rangeToMs - controls.rangeFromMs > 24 * 60 * 60 * 1000);
-
-	const openRangeEditor = () => {
-		fromInput = asDateTimeLocal(controls.rangeFromMs);
-		toInput = asDateTimeLocal(controls.rangeToMs);
-		rangeOpen = true;
-	};
-
-	const applyRange = () => {
-		const nextFrom = asTimestamp(fromInput);
-		const nextTo = asTimestamp(toInput);
-		if (nextFrom === null || nextTo === null || nextFrom > nextTo) return;
-		onControlChange({ type: 'range', fromMs: nextFrom, toMs: nextTo });
-		rangeOpen = false;
-	};
 
 	const chartYDomain = $derived.by<[number, number]>(() => {
 		const balances = analytics?.timeline.map((item) => item.balance) ?? [];
@@ -146,37 +114,12 @@
 						Updating...
 					</span>
 				{/if}
-				<Popover.Root bind:open={rangeOpen}>
-					<Popover.Trigger
-						type="button"
-						class={buttonVariants({ variant: 'outline', size: 'sm' })}
-						onclick={openRangeEditor}
-					>
-						<CalendarRange class="size-4" />
-						{new Date(controls.rangeFromMs).toLocaleDateString('de-DE')} - {new Date(controls.rangeToMs).toLocaleDateString('de-DE')}
-					</Popover.Trigger>
-					<Popover.Content class="w-80 space-y-3">
-						<div class="space-y-2">
-							<Label for="range-from">From</Label>
-							<Input
-								id="range-from"
-								type="datetime-local"
-								class="w-full"
-								bind:value={fromInput}
-							/>
-						</div>
-						<div class="space-y-2">
-							<Label for="range-to">To</Label>
-							<Input
-								id="range-to"
-								type="datetime-local"
-								class="w-full"
-								bind:value={toInput}
-							/>
-						</div>
-						<Button type="button" class="w-full" onclick={applyRange}>Apply Range</Button>
-					</Popover.Content>
-				</Popover.Root>
+				<ChannelPointsRangeSelector
+					rangeFromMs={controls.rangeFromMs}
+					rangeToMs={controls.rangeToMs}
+					onApply={({ fromMs, toMs }) => onControlChange({ type: 'range', fromMs, toMs })}
+					disabled={loading && !analytics}
+				/>
 			</div>
 		</div>
 	</CardHeader>

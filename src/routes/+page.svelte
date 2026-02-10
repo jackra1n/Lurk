@@ -3,15 +3,18 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import Sun from '@lucide/svelte/icons/sun';
 	import { Button } from '$lib/components/ui/button';
+	import ChannelPointsCard from '$lib/components/dashboard/channel-points-card.svelte';
 	import QuickActionsCard from '$lib/components/dashboard/quick-actions-card.svelte';
 	import StatusSummaryCards from '$lib/components/dashboard/status-summary-cards.svelte';
 	import TopbarAuthControl from '$lib/components/dashboard/topbar-auth-control.svelte';
-	import TrackedStreamersCard from '$lib/components/dashboard/tracked-streamers-card.svelte';
 	import type {
 		AuthStatusResponse,
+		ChannelPointsAnalyticsResponse,
+		ChannelPointsSortBy,
 		LifecycleReason,
 		MinerLifecycle,
-		MinerStatusResponse
+		MinerStatusResponse,
+		SortDir
 	} from '$lib/components/dashboard/types';
 
 	const themeStorageKey = 'theme';
@@ -19,6 +22,8 @@
 	const slowPollMs = 10000;
 	const lifecycleValues: MinerLifecycle[] = ['running', 'ready', 'auth_required', 'authenticating', 'error'];
 	const reasonValues: Exclude<LifecycleReason, null>[] = ['missing_token', 'invalid_token', 'auth_pending', 'startup_failed'];
+	const defaultAnalyticsRangeMs = 24 * 60 * 60 * 1000;
+	const initialAnalyticsRangeToMs = Date.now();
 
 	const defaultAuthStatus: AuthStatusResponse = {
 		authenticated: false,
@@ -44,6 +49,14 @@
 	let loadingStartAfterAuth = $state(false);
 	let message = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
+	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
+	let analyticsLoading = $state(false);
+	let analyticsErrorMessage = $state<string | null>(null);
+	let analyticsSortBy = $state<ChannelPointsSortBy>('lastActive');
+	let analyticsSortDir = $state<SortDir>('desc');
+	let analyticsRangeToMs = $state(initialAnalyticsRangeToMs);
+	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
+	let selectedStreamerLogin = $state<string | null>(null);
 	let pollIntervalMs = $state(slowPollMs);
 
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -150,6 +163,49 @@
 		} satisfies MinerStatusResponse;
 	};
 
+	const fetchChannelPointsAnalytics = async () => {
+		const query = new URLSearchParams({
+			from: String(analyticsRangeFromMs),
+			to: String(analyticsRangeToMs),
+			sortBy: analyticsSortBy,
+			sortDir: analyticsSortDir
+		});
+
+		if (selectedStreamerLogin) {
+			query.set('selectedStreamer', selectedStreamerLogin);
+		}
+
+		const response = await fetch(`/api/dashboard/channel-points?${query.toString()}`);
+		const payload = await readJson(response);
+
+		if (
+			!response.ok ||
+			!payload ||
+			typeof payload !== 'object' ||
+			!(payload as { success?: unknown }).success
+		) {
+			throw new Error(getErrorMessage(payload, 'Failed to fetch channel points analytics'));
+		}
+
+		return payload as ChannelPointsAnalyticsResponse;
+	};
+
+	const refreshAnalytics = async (showLoading = false) => {
+		if (showLoading) analyticsLoading = true;
+
+		try {
+			const nextAnalytics = await fetchChannelPointsAnalytics();
+			analytics = nextAnalytics;
+			selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
+			analyticsErrorMessage = null;
+		} catch (error) {
+			analyticsErrorMessage =
+				error instanceof Error ? error.message : 'Failed to fetch channel points analytics';
+		} finally {
+			if (showLoading) analyticsLoading = false;
+		}
+	};
+
 	const getDesiredPollInterval = () =>
 		authStatus.pendingLogin || minerStatus.lifecycle === 'authenticating' ? fastPollMs : slowPollMs;
 
@@ -175,6 +231,7 @@
 
 		authStatus = nextAuthStatus;
 		minerStatus = nextMinerStatus;
+		await refreshAnalytics();
 
 		if (!nextAuthStatus.authenticated) {
 			autoStartAttempted = false;
@@ -232,6 +289,27 @@
 			errorMessage = error instanceof Error ? error.message : 'Failed to refresh status';
 		}
 	};
+
+	const setAnalyticsSortBy = async (value: ChannelPointsSortBy) => {
+		analyticsSortBy = value;
+		await refreshAnalytics(true);
+	};
+
+	const toggleAnalyticsSortDir = async () => {
+		analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
+		await refreshAnalytics(true);
+	};
+
+	const setSelectedStreamer = async (login: string) => {
+		selectedStreamerLogin = login;
+		await refreshAnalytics(true);
+	};
+
+	const setAnalyticsRange = async (fromMs: number, toMs: number) => {
+		analyticsRangeFromMs = fromMs;
+		analyticsRangeToMs = toMs;
+		await refreshAnalytics(true);
+	};
 </script>
 
 <svelte:head>
@@ -269,10 +347,22 @@
 			</p>
 		{/if}
 
-		<StatusSummaryCards {minerStatus} />
+		<StatusSummaryCards {minerStatus} summary={analytics?.summary ?? null} />
 
 		<section>
-			<TrackedStreamersCard trackedStreamerCount={minerStatus.configuredStreamers.length} />
+			<ChannelPointsCard
+				{analytics}
+				loading={analyticsLoading}
+				errorMessage={analyticsErrorMessage}
+				sortBy={analyticsSortBy}
+				sortDir={analyticsSortDir}
+				rangeFromMs={analyticsRangeFromMs}
+				rangeToMs={analyticsRangeToMs}
+				onSortByChange={setAnalyticsSortBy}
+				onToggleSortDir={toggleAnalyticsSortDir}
+				onSelectStreamer={setSelectedStreamer}
+				onRangeApply={setAnalyticsRange}
+			/>
 		</section>
 
 		<QuickActionsCard actions={quickActions} />

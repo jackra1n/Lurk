@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { Card, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import type { MinerStatusResponse } from './types';
+	import type { ChannelPointsAnalyticsSummary, MinerStatusResponse } from './types';
 
 	let {
-		minerStatus
+		minerStatus,
+		summary
 	}: {
 		minerStatus: MinerStatusResponse;
+		summary: ChannelPointsAnalyticsSummary | null;
 	} = $props();
 
 	const minerLabel = () => {
@@ -41,7 +43,7 @@
 	};
 </script>
 
-<section class="grid gap-4 md:grid-cols-2">
+<section class="grid gap-4 md:grid-cols-3">
 	<Card class="bg-card/80">
 		<CardHeader class="gap-2">
 			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
@@ -55,8 +57,16 @@
 
 	<Card class="bg-card/80">
 		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Tracked Streamers</p>
-			<CardTitle class="text-2xl">{minerStatus.configuredStreamers.length}</CardTitle>
+			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Tracked Channels</p>
+			<CardTitle class="text-2xl">{summary?.trackedChannels ?? minerStatus.configuredStreamers.length}</CardTitle>
+		</CardHeader>
+	</Card>
+
+	<Card class="bg-card/80">
+		<CardHeader class="gap-2">
+			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Points Earned This Session</p>
+			<CardTitle class="text-2xl">+{(summary?.pointsEarnedThisSession ?? 0).toLocaleString()}</CardTitle>
+			<CardDescription class="text-sm">Total from active run.</CardDescription>
 		</CardHeader>
 	</Card>
 </section>

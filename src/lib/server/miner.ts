@@ -20,11 +20,9 @@ export interface StreamerState {
 	broadcastId: string | null;
 	spadeUrl: string | null;
 	// Timestamps
-	streamUpAt: Date | null;
-	streamDownAt: Date | null;
-	onlineAt: number; // epoch ms, 0 = never
-	offlineAt: number; // epoch ms, 0 = never
-	lastChecked: Date | null;
+	streamUpAt: number; // PubSub stream-up timestamp, 0 = never
+	onlineAt: number; // confirmed online, used for 30-second grace period
+	offlineAt: number; // confirmed offline, used for 60-second debounce
 	lastContextRefresh: number; // epoch ms
 	// Watch tracking
 	minuteWatched: number;
@@ -319,11 +317,9 @@ class MinerService {
 					viewers: 0,
 					broadcastId: null,
 					spadeUrl: null,
-					streamUpAt: null,
-					streamDownAt: null,
+					streamUpAt: 0,
 					onlineAt: 0,
 					offlineAt: 0,
-					lastChecked: null,
 					lastContextRefresh: 0,
 					minuteWatched: 0,
 					minuteWatchedTimestamp: 0,
@@ -485,7 +481,7 @@ class MinerService {
 
 		if (messageType === VideoPlaybackMessageType.StreamUp) {
 			// record timestamp but do NOT mark live yet -- wait for viewcount verification
-			streamer.streamUpAt = new Date();
+			streamer.streamUpAt = Date.now();
 			logger.debug({ streamer: streamer.name }, 'stream-up received, waiting for verification');
 		} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 			const wasLive = streamer.isLive;
@@ -517,7 +513,6 @@ class MinerService {
 			}
 
 			streamer.isLive = false;
-			streamer.streamDownAt = new Date();
 			streamer.offlineAt = Date.now();
 			streamer.watchStreakMissing = false;
 			streamer.title = null;
@@ -533,8 +528,7 @@ class MinerService {
 
 			if (
 				!streamer.isLive &&
-				streamer.streamUpAt &&
-				Date.now() - streamer.streamUpAt.getTime() > 2 * 60_000
+				Date.now() - streamer.streamUpAt > 2 * 60_000
 			) {
 				this.checkStreamerOnline(streamer).catch((err) => {
 					logger.error({ err, streamer: streamer.name }, 'Failed to check streamer online');
@@ -697,7 +691,6 @@ class MinerService {
 	}
 
 	private async processStreamer(state: StreamerState): Promise<void> {
-		state.lastChecked = new Date();
 		state.lastContextRefresh = Date.now();
 
 		if (!state.channelId) {

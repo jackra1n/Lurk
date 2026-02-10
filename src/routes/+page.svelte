@@ -66,6 +66,8 @@
 		rangeFromMs: analyticsRangeFromMs,
 		rangeToMs: analyticsRangeToMs
 	} satisfies ChannelPointsControls);
+	let analyticsRequestSeq = 0;
+	let analyticsLoadingRequestSeq = 0;
 
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 	let autoStartAttempted = false;
@@ -199,18 +201,24 @@
 	};
 
 	const refreshAnalytics = async (showLoading = false) => {
-		if (showLoading) analyticsLoading = true;
+		const requestSeq = ++analyticsRequestSeq;
+		if (showLoading) {
+			analyticsLoading = true;
+			analyticsLoadingRequestSeq = requestSeq;
+		}
 
 		try {
 			const nextAnalytics = await fetchChannelPointsAnalytics();
+			if (requestSeq !== analyticsRequestSeq) return;
 			analytics = nextAnalytics;
 			selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
 			analyticsErrorMessage = null;
 		} catch (error) {
+			if (requestSeq !== analyticsRequestSeq) return;
 			analyticsErrorMessage =
 				error instanceof Error ? error.message : 'Failed to fetch channel points analytics';
 		} finally {
-			if (showLoading) analyticsLoading = false;
+			if (showLoading && requestSeq === analyticsLoadingRequestSeq) analyticsLoading = false;
 		}
 	};
 

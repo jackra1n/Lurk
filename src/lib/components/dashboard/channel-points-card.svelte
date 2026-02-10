@@ -1,5 +1,6 @@
 <script lang="ts">
 	import CalendarRange from '@lucide/svelte/icons/calendar-range';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import { scaleUtc } from 'd3-scale';
@@ -129,6 +130,12 @@
 			</div>
 
 			<div class="flex items-center gap-2">
+				{#if loading && analytics}
+					<span class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+						<LoaderCircle class="size-3 animate-spin" />
+						Updating...
+					</span>
+				{/if}
 				<Popover.Root bind:open={rangeOpen}>
 					<Popover.Trigger
 						type="button"
@@ -171,7 +178,7 @@
 			</p>
 		{/if}
 
-		{#if loading}
+		{#if loading && !analytics}
 			<p class="rounded-lg border border-border/70 bg-background/70 px-3 py-8 text-center text-sm text-muted-foreground">
 				Loading channel points...
 			</p>

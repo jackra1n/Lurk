@@ -24,7 +24,6 @@ export interface StreamerState {
 	streamDownAt: Date | null;
 	onlineAt: number; // epoch ms, 0 = never
 	offlineAt: number; // epoch ms, 0 = never
-	lastChecked: Date | null;
 	lastContextRefresh: number; // epoch ms
 	// Watch tracking
 	minuteWatched: number;
@@ -323,7 +322,6 @@ class MinerService {
 					streamDownAt: null,
 					onlineAt: 0,
 					offlineAt: 0,
-					lastChecked: null,
 					lastContextRefresh: 0,
 					minuteWatched: 0,
 					minuteWatchedTimestamp: 0,
@@ -697,7 +695,6 @@ class MinerService {
 	}
 
 	private async processStreamer(state: StreamerState): Promise<void> {
-		state.lastChecked = new Date();
 		state.lastContextRefresh = Date.now();
 
 		if (!state.channelId) {

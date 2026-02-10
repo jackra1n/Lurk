@@ -23,6 +23,14 @@ export interface ChannelPointsContext {
 	activeMultipliers: { factor: number }[];
 }
 
+export type ClaimBonusResult =
+	| { ok: true }
+	| {
+			ok: false;
+			reason: 'not_authenticated' | 'gql_error';
+			errors?: Array<{ message: string }>;
+	  };
+
 interface GqlResponse<T = unknown> {
 	data?: T;
 	errors?: Array<{ message: string }>;
@@ -142,8 +150,13 @@ export class TwitchClient {
 			{ channelLogin: channelLogin.toLowerCase() }
 		);
 
-		if (response.errors || !response.data?.community?.channel) {
-			logger.error({ channelLogin }, 'Failed to get channel points context');
+		if (response.errors) {
+			logger.error({ channelLogin, errors: response.errors }, 'Failed to get channel points context');
+			return null;
+		}
+
+		if (!response.data?.community?.channel) {
+			logger.error({ channelLogin }, 'Channel points context missing channel data');
 			return null;
 		}
 
@@ -178,7 +191,7 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			logger.error({ channelLogin }, 'Failed to get stream info');
+			logger.error({ channelLogin, errors: response.errors }, 'Failed to get stream info');
 			return null;
 		}
 
@@ -196,13 +209,13 @@ export class TwitchClient {
 		};
 	}
 
-	async claimBonus(channelId: string, claimId: string): Promise<boolean> {
+	async claimBonus(channelId: string, claimId: string): Promise<ClaimBonusResult> {
 		if (!this.isAuthenticated()) {
-			logger.warn('Cannot claim bonus - not authenticated');
-			return false;
+			logger.debug({ channelId, claimId }, 'Cannot claim bonus - not authenticated');
+			return { ok: false, reason: 'not_authenticated' };
 		}
 
-		logger.info({ channelId, claimId }, 'Claiming bonus');
+		logger.debug({ channelId, claimId }, 'Claiming bonus');
 
 		const response = await this.postGqlRequest(GQL_OPERATIONS.ClaimCommunityPoints, {
 			input: {
@@ -212,12 +225,11 @@ export class TwitchClient {
 		});
 
 		if (response.errors) {
-			logger.error({ channelId, claimId, errors: response.errors }, 'Failed to claim bonus');
-			return false;
+			logger.debug({ channelId, claimId, errors: response.errors }, 'Claim bonus request failed');
+			return { ok: false, reason: 'gql_error', errors: response.errors };
 		}
 
-		logger.info({ channelId }, 'Successfully claimed bonus');
-		return true;
+		return { ok: true };
 	}
 
 	async getSpadeUrl(channelLogin: string): Promise<string | null> {

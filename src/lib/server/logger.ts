@@ -31,14 +31,16 @@ rotatingFileStream.on('error', (error) => {
 const consolePrettyStream = pretty({
 	colorize: true,
 	translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
-	ignore: 'pid,hostname',
+	ignore: 'pid,hostname,scope',
+	messageFormat: '{if scope}[{scope}] {end}{msg}',
 	singleLine: true,
 });
 
 const filePrettyStream = pretty({
 	colorize: false,
 	translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
-	ignore: 'pid,hostname',
+	ignore: 'pid,hostname,scope',
+	messageFormat: '{if scope}[{scope}] {end}{msg}',
 	singleLine: true,
 	destination: rotatingFileStream,
 });

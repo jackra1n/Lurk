@@ -212,11 +212,11 @@ class MinerService {
 		});
 
 		twitchPubSub.onConnected(() => {
-			logger.info('PubSub connected');
+			logger.debug('PubSub connected');
 		});
 
 		twitchPubSub.onDisconnected(() => {
-			logger.info('PubSub disconnected');
+			logger.debug('PubSub disconnected');
 		});
 
 		try {
@@ -412,13 +412,23 @@ class MinerService {
 		}
 	}
 
+	private streamerContext(streamer?: StreamerState, channelId?: string | null) {
+		const resolvedChannelId = channelId ?? streamer?.channelId;
+
+		return {
+			...(streamer?.name ? { streamer: streamer.name } : {}),
+			...(resolvedChannelId ? { channelId: resolvedChannelId } : {})
+		};
+	}
+
 	private handleCommunityPointsMessage(messageType: string, data: unknown): void {
 		if (messageType === CommunityPointsMessageType.ClaimAvailable) {
 			const claimData = data as { data: ClaimAvailableData };
 			const { channel_id: channelId, id: claimId } = claimData.data.claim;
 			const streamer = this.findStreamerByChannelId(channelId);
+			const logContext = this.streamerContext(streamer, channelId);
 
-			logger.info({ channelId }, 'Claim available');
+			logger.info(logContext, 'Claim available');
 			this.withEventStore('claim_available', () => {
 				eventStore.recordEvent({
 					streamer: {
@@ -436,13 +446,18 @@ class MinerService {
 			const pointsData = data as { data: PointsEarnedData };
 			const { balance, point_gain } = pointsData.data;
 			const channelId = pointsData.data.channel_id ?? balance.channel_id;
+			const streamer = channelId ? this.findStreamerByChannelId(channelId) : undefined;
 
 			logger.info(
-				{ channelId, points: point_gain.total_points, reason: point_gain.reason_code, balance: balance.balance },
+				{
+					...this.streamerContext(streamer, channelId),
+					points: point_gain.total_points,
+					reason: point_gain.reason_code,
+					balance: balance.balance
+				},
 				'Points earned'
 			);
 
-			const streamer = channelId ? this.findStreamerByChannelId(channelId) : undefined;
 			if (channelId) {
 				this.withEventStore('points_earned', () => {
 					eventStore.recordEvent({
@@ -622,6 +637,7 @@ class MinerService {
 		source: 'pubsub' | 'gql_context'
 	): Promise<void> {
 		const streamer = this.findStreamerByChannelId(channelId);
+		const logContext = { ...this.streamerContext(streamer, channelId), claimId, source };
 		this.withEventStore('claim_attempt', () => {
 			eventStore.recordEvent({
 				streamer: {
@@ -635,21 +651,39 @@ class MinerService {
 		});
 
 		try {
-			const success = await twitchClient.claimBonus(channelId, claimId);
-			if (success) {
-				this.withEventStore('claim_success', () => {
+			const result = await twitchClient.claimBonus(channelId, claimId);
+			if (!result.ok) {
+				this.withEventStore('claim_failed', () => {
 					eventStore.recordEvent({
 						streamer: {
 							login: streamer?.name,
 							channelId
 						},
-						eventType: 'claim_success',
+						eventType: 'claim_failed',
 						source,
-						claimId
+						claimId,
+						payload: {
+							reason: result.reason,
+							...(result.errors ? { errors: result.errors } : {})
+						}
 					});
 				});
-				logger.info({ channelId }, 'Successfully claimed bonus');
+				logger.warn({ ...logContext, reason: result.reason }, 'Failed to claim bonus');
+				return;
 			}
+
+			this.withEventStore('claim_success', () => {
+				eventStore.recordEvent({
+					streamer: {
+						login: streamer?.name,
+						channelId
+					},
+					eventType: 'claim_success',
+					source,
+					claimId
+				});
+			});
+			logger.info(logContext, 'Successfully claimed bonus');
 		} catch (error) {
 			this.withEventStore('claim_failed', () => {
 				eventStore.recordEvent({
@@ -661,11 +695,12 @@ class MinerService {
 					source,
 					claimId,
 					payload: {
+						reason: 'exception',
 						error: String(error)
 					}
 				});
 			});
-			logger.error({ err: error, channelId }, 'Failed to claim bonus');
+			logger.error({ ...logContext, err: error }, 'Failed to claim bonus');
 		}
 	}
 

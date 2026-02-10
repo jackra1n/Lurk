@@ -119,6 +119,10 @@
 		if (Number.isNaN(numeric)) return '';
 		return Math.round(numeric).toLocaleString('de-DE');
 	};
+
+	const selectedStreamer = $derived(
+		analytics?.streamers.find((streamer) => streamer.login === analytics.selectedStreamerLogin) ?? null
+	);
 </script>
 
 <Card class="bg-card/80">
@@ -126,7 +130,13 @@
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
 				<CardTitle class="text-lg">Channel Points</CardTitle>
-				<CardDescription class="text-sm">Balance timeline and sorter for tracked streamers.</CardDescription>
+				<CardDescription class="text-sm">
+					{#if selectedStreamer}
+						{selectedStreamer.login} · {selectedStreamer.latestBalance.toLocaleString()} pts
+					{:else}
+						Balance timeline and sorter for tracked streamers.
+					{/if}
+				</CardDescription>
 			</div>
 
 			<div class="flex items-center gap-2">
@@ -246,11 +256,6 @@
 				</div>
 
 				<div class="space-y-2">
-					{#if analytics.selectedStreamerLogin}
-						<p class="text-sm font-medium">
-							{analytics.selectedStreamerLogin} · {analytics.timeline.length.toLocaleString()} samples
-						</p>
-					{/if}
 					{#if analytics.timeline.length === 0}
 						<p class="rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-10 text-center text-sm text-muted-foreground">
 							No channel points history in this range.

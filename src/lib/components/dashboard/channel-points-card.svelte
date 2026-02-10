@@ -246,9 +246,10 @@
 									onclick={() => onControlChange({ type: 'selectStreamer', login: streamer.login })}
 								>
 									<p class="text-sm font-medium">{streamer.login}</p>
-									<p class="text-xs text-muted-foreground">
-										{streamer.pointsEarned.toLocaleString()} pts · {relativeTime(streamer.lastActiveAtMs)}
-									</p>
+									<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+										<span>{streamer.latestBalance.toLocaleString()} pts</span>
+										<span class="text-right">{relativeTime(streamer.lastActiveAtMs)}</span>
+									</div>
 								</button>
 							{/each}
 						</div>

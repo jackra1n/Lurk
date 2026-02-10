@@ -74,7 +74,7 @@
 	const formatXAxisTick = (value: unknown) => {
 		const date = value instanceof Date ? value : new Date(value as string | number);
 		if (Number.isNaN(date.getTime())) return '';
-		return date.toLocaleString('de-DE', {
+		return date.toLocaleString('en-GB', {
 			...(isMultiDayRange ? { day: '2-digit', month: '2-digit' } : {}),
 			hour: '2-digit',
 			minute: '2-digit',
@@ -85,7 +85,7 @@
 	const formatYAxisTick = (value: unknown) => {
 		const numeric = typeof value === 'number' ? value : Number(value);
 		if (Number.isNaN(numeric)) return '';
-		return Math.round(numeric).toLocaleString('de-DE');
+		return Math.round(numeric).toLocaleString('en-GB');
 	};
 
 	const selectedStreamer = $derived(
@@ -237,7 +237,7 @@
 									<ChartTooltip
 										labelFormatter={(value) => {
 											const date = value instanceof Date ? value : new Date(value);
-											return date.toLocaleString('de-DE', {
+											return date.toLocaleString('en-GB', {
 												...(isMultiDayRange ? { day: '2-digit', month: '2-digit', year: 'numeric' } : {}),
 												hour: '2-digit',
 												minute: '2-digit',

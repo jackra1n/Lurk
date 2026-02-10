@@ -30,6 +30,22 @@
 
 	const toDayStartMs = (value: DateValue) => value.toDate(localTimeZone).getTime();
 	const toDayEndMs = (value: DateValue) => value.add({ days: 1 }).toDate(localTimeZone).getTime() - 1;
+	const formatDate = (valueMs: number) => new Date(valueMs).toLocaleDateString('en-GB');
+	const isSameLocalDay = (leftMs: number, rightMs: number) => {
+		const left = new Date(leftMs);
+		const right = new Date(rightMs);
+
+		return (
+			left.getFullYear() === right.getFullYear() &&
+			left.getMonth() === right.getMonth() &&
+			left.getDate() === right.getDate()
+		);
+	};
+	const rangeLabel = $derived.by(() =>
+		isSameLocalDay(rangeFromMs, rangeToMs)
+			? formatDate(rangeFromMs)
+			: `${formatDate(rangeFromMs)} - ${formatDate(rangeToMs)}`
+	);
 	const canApply = $derived(Boolean(selectedRange.start && selectedRange.end));
 	const syncSelectedRange = () => {
 		selectedRange = {
@@ -62,7 +78,7 @@
 		{disabled}
 	>
 		<CalendarRange class="size-4" />
-		{new Date(rangeFromMs).toLocaleDateString('de-DE')} - {new Date(rangeToMs).toLocaleDateString('de-DE')}
+		{rangeLabel}
 	</Popover.Trigger>
 	<Popover.Portal>
 		<Popover.Content

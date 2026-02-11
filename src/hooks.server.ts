@@ -14,7 +14,7 @@ async function initializeMiner(): Promise<void> {
 	logger.info('Initializing Twitch Points Miner...');
 	eventStore.initialize();
 	if (!getAutoStartMiner()) {
-		logger.info({ startup: 'disabled' }, 'Miner initialization skipped (auto-start disabled)');
+		logger.warn({ startup: 'disabled' }, 'Miner initialization skipped (auto-start disabled)');
 		return;
 	}
 
@@ -25,11 +25,11 @@ async function initializeMiner(): Promise<void> {
 	}
 
 	if (result.reason === 'missing_token' || result.reason === 'invalid_token') {
-		logger.info({ startup: 'auth_required', reason: result.reason }, 'Miner initialization skipped');
+		logger.warn({ startup: 'auth_required', reason: result.reason }, 'Miner initialization skipped');
 		return;
 	}
 
-	logger.warn({ startup: 'error', reason: result.reason }, 'Miner initialization failed');
+	logger.error({ startup: 'error', reason: result.reason }, 'Miner initialization failed');
 }
 
 initializeMiner().catch((err) => {

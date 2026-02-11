@@ -202,7 +202,7 @@
 						</Select.Content>
 					</Select.Root>
 
-					<ScrollArea class="h-[360px]">
+					<ScrollArea class="h-90">
 						<div class="space-y-1">
 							{#each analytics.streamers as streamer (streamer.login)}
 								{@const streamerState = runtimeStateByLogin.get(streamer.login)}
@@ -241,7 +241,7 @@
 							No channel points history in this range.
 						</p>
 					{:else}
-						<ChartContainer config={chartConfig} class="h-[360px] w-full !aspect-auto !overflow-hidden">
+						<ChartContainer config={chartConfig} class="h-90 w-full aspect-auto! overflow-hidden!">
 							<AreaChart
 								data={analytics.timeline}
 								x={(item) => new Date(item.timestampMs)}

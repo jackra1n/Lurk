@@ -119,22 +119,20 @@
 	const logout = () => runAuthAction('logout');
 </script>
 
-<Tooltip.Provider>
-	<Tooltip.Root>
-		<Tooltip.Trigger
-			type="button"
-			class="inline-flex h-8 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-			onclick={openAuthModal}
-			aria-label="Open authentication panel"
-		>
-			<span class={`size-2 rounded-full ${authStatusDotClass()}`} aria-hidden="true"></span>
-			<span>{authBadgeLabel()}</span>
-		</Tooltip.Trigger>
-		<Tooltip.Content side="bottom" sideOffset={8}>
-			{tooltipText()}
-		</Tooltip.Content>
-	</Tooltip.Root>
-</Tooltip.Provider>
+<Tooltip.Root>
+	<Tooltip.Trigger
+		type="button"
+		class="inline-flex h-8 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+		onclick={openAuthModal}
+		aria-label="Open authentication panel"
+	>
+		<span class={`size-2 rounded-full ${authStatusDotClass()}`} aria-hidden="true"></span>
+		<span>{authBadgeLabel()}</span>
+	</Tooltip.Trigger>
+	<Tooltip.Content side="bottom" sideOffset={8}>
+		{tooltipText()}
+	</Tooltip.Content>
+</Tooltip.Root>
 
 <Dialog.Root bind:open={authModalOpen}>
 	<Dialog.Content class="sm:max-w-md">

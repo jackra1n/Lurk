@@ -11,6 +11,7 @@
 	import { ChartContainer, ChartTooltip } from '$lib/components/ui/chart';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Select from '$lib/components/ui/select';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import type {
 		ChannelPointsAnalyticsResponse,
 		ChannelPointsControlChange,
@@ -217,11 +218,20 @@
 									onclick={() => onControlChange({ type: 'selectStreamer', login: streamer.login })}
 								>
 									<div class="flex items-center gap-2.5">
-										<span
-											class={`size-2 shrink-0 rounded-full ${streamerDotClass(streamerState)}`}
-											title={streamerDotTooltip(streamerState)}
-											aria-hidden="true"
-										></span>
+										<Tooltip.Root>
+											<Tooltip.Trigger aria-label={streamerDotTooltip(streamerState)}>
+												{#snippet child({ props })}
+													{@const { type: _type, ...triggerProps } = props}
+													<span
+														{...triggerProps}
+														class={`size-2 shrink-0 rounded-full ${streamerDotClass(streamerState)}`}
+													></span>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Content side="top" sideOffset={8}>
+												{streamerDotTooltip(streamerState)}
+											</Tooltip.Content>
+										</Tooltip.Root>
 										<div class="min-w-0 flex-1">
 											<p class="text-sm font-medium">{streamer.login}</p>
 											<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">

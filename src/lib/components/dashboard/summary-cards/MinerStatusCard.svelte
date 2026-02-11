@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Card, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import type { MinerStatusResponse } from '../shared/types';
 
 	let { minerStatus }: { minerStatus: MinerStatusResponse } = $props();
@@ -41,7 +42,17 @@
 	<CardHeader class="gap-2">
 		<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
 		<div class="flex items-center gap-2">
-			<span class={`size-2.5 rounded-full ${minerStatusDotClass()}`} title={minerStatusTooltip()} aria-hidden="true"></span>
+			<Tooltip.Root>
+				<Tooltip.Trigger aria-label={minerStatusTooltip()}>
+					{#snippet child({ props })}
+						{@const { type: _type, ...triggerProps } = props}
+						<span {...triggerProps} class={`size-2.5 rounded-full ${minerStatusDotClass()}`}></span>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content side="top" sideOffset={8}>
+					{minerStatusTooltip()}
+				</Tooltip.Content>
+			</Tooltip.Root>
 			<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
 		</div>
 		<CardDescription class="text-sm">{minerDescription()}</CardDescription>

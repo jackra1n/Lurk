@@ -5,7 +5,7 @@
 	import { scaleUtc } from 'd3-scale';
 	import { curveLinear } from 'd3-shape';
 	import { Area, AreaChart, LinearGradient } from 'layerchart';
-	import ChannelPointsRangeSelector from './channel-points-range-selector.svelte';
+	import DateRangePicker from './DateRangePicker.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import type { ChartConfig } from '$lib/components/ui/chart';
 	import { ChartContainer, ChartTooltip } from '$lib/components/ui/chart';
@@ -17,7 +17,7 @@
 		ChannelPointsControls,
 		ChannelPointsSortBy,
 		StreamerRuntimeState
-	} from './types';
+	} from '../shared/types';
 
 	let {
 		analytics,
@@ -141,7 +141,7 @@
 						Updating...
 					</span>
 				{/if}
-				<ChannelPointsRangeSelector
+				<DateRangePicker
 					rangeFromMs={controls.rangeFromMs}
 					rangeToMs={controls.rangeToMs}
 					onApply={({ fromMs, toMs }) => onControlChange({ type: 'range', fromMs, toMs })}

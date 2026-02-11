@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import type { AuthStatusResponse } from './types';
+	import type { AuthStatusResponse } from '../shared/types';
 
 	let {
 		authStatus,

@@ -1,14 +1,8 @@
 <script lang="ts">
 	import { Card, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import type { ChannelPointsAnalyticsSummary, MinerStatusResponse } from './types';
+	import type { MinerStatusResponse } from '../shared/types';
 
-	let {
-		minerStatus,
-		summary
-	}: {
-		minerStatus: MinerStatusResponse;
-		summary: ChannelPointsAnalyticsSummary | null;
-	} = $props();
+	let { minerStatus }: { minerStatus: MinerStatusResponse } = $props();
 
 	const minerLabel = () => {
 		if (minerStatus.running) return 'Running';
@@ -43,30 +37,13 @@
 	};
 </script>
 
-<section class="grid gap-4 md:grid-cols-3">
-	<Card class="bg-card/80">
-		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
-			<div class="flex items-center gap-2">
-				<span class={`size-2.5 rounded-full ${minerStatusDotClass()}`} title={minerStatusTooltip()} aria-hidden="true"></span>
-				<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
-			</div>
-			<CardDescription class="text-sm">{minerDescription()}</CardDescription>
-		</CardHeader>
-	</Card>
-
-	<Card class="bg-card/80">
-		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Tracked Channels</p>
-			<CardTitle class="text-2xl">{summary?.trackedChannels ?? minerStatus.configuredStreamers.length}</CardTitle>
-		</CardHeader>
-	</Card>
-
-	<Card class="bg-card/80">
-		<CardHeader class="gap-2">
-			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Points Earned This Session</p>
-			<CardTitle class="text-2xl">+{(summary?.pointsEarnedThisSession ?? 0).toLocaleString()}</CardTitle>
-			<CardDescription class="text-sm">Total from active run.</CardDescription>
-		</CardHeader>
-	</Card>
-</section>
+<Card class="bg-card/80">
+	<CardHeader class="gap-2">
+		<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
+		<div class="flex items-center gap-2">
+			<span class={`size-2.5 rounded-full ${minerStatusDotClass()}`} title={minerStatusTooltip()} aria-hidden="true"></span>
+			<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
+		</div>
+		<CardDescription class="text-sm">{minerDescription()}</CardDescription>
+	</CardHeader>
+</Card>

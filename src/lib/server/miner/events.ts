@@ -54,17 +54,19 @@ export function handlePubSubMessage(
 	const topicId = topicParts[1];
 
 	if (topicType === PubSubTopicType.CommunityPointsUser) {
-		handleCommunityPointsMessage(deps, messageType, data);
+		handleCommunityPointsMessage(deps, messageType, data).catch((err) => {
+			logger.error({ err, topic, messageType }, 'Error handling community points message');
+		});
 	} else if (topicType === PubSubTopicType.VideoPlaybackById) {
 		handleVideoPlaybackMessage(deps, topicId, messageType, data);
 	}
 }
 
-function handleCommunityPointsMessage(
+async function handleCommunityPointsMessage(
 	deps: EventHandlerDeps,
 	messageType: string,
 	data: unknown
-): void {
+): Promise<void> {
 	const { streamerStates } = deps;
 
 	if (messageType === CommunityPointsMessageType.ClaimAvailable) {
@@ -86,7 +88,7 @@ function handleCommunityPointsMessage(
 				payload: data
 			});
 		});
-		deps.claimBonus(channelId, claimId, 'pubsub');
+		await deps.claimBonus(channelId, claimId, 'pubsub');
 	} else if (messageType === CommunityPointsMessageType.PointsEarned) {
 		const pointsData = data as { data: PointsEarnedData };
 		const { balance, point_gain } = pointsData.data;

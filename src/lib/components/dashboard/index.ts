@@ -1,0 +1,1 @@
+export { DashboardRoot } from './root';

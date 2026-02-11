@@ -53,6 +53,10 @@ export function handlePubSubMessage(
 	const topicType = topicParts[0];
 	const topicId = topicParts[1];
 
+	if (!topicId) {
+		logger.warn({ topic, messageType }, 'Malformed topic: missing ID segment');
+	}
+
 	if (topicType === PubSubTopicType.CommunityPointsUser) {
 		handleCommunityPointsMessage(deps, messageType, data).catch((err) => {
 			logger.error({ err, topic, messageType }, 'Error handling community points message');
@@ -195,6 +199,7 @@ function handleVideoPlaybackMessage(
 
 		if (
 			!streamer.isLive &&
+			streamer.stream.streamUpAt > 0 &&
 			Date.now() - streamer.stream.streamUpAt > 2 * 60_000
 		) {
 			deps.checkStreamerOnline(streamer).catch((err) => {

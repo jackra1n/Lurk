@@ -351,7 +351,7 @@
 </script>
 
 <svelte:head>
-	<title>Lurk | Control Surface</title>
+	<title>Lurk - Dashboard</title>
 </svelte:head>
 
 <div class="relative min-h-screen overflow-hidden bg-background text-foreground">

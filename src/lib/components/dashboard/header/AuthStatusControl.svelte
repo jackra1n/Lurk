@@ -116,7 +116,6 @@
 
 	const startLogin = () => runAuthAction('startLogin');
 	const cancelLogin = () => runAuthAction('cancelLogin');
-	const logout = () => runAuthAction('logout');
 </script>
 
 <Tooltip.Root>
@@ -199,18 +198,6 @@
 					<p class="text-sm text-muted-foreground">Connected account</p>
 					<p class="mt-1 text-sm font-medium">{authStatus.username ?? authStatus.userId ?? 'Twitch user'}</p>
 				</div>
-				<Dialog.Footer>
-					<Button
-						type="button"
-						variant="outline"
-						class="w-full sm:w-auto"
-						disabled={loadingAuthAction || loadingStartAfterAuth}
-						onclick={logout}
-					>
-						<LogOut class="size-4" />
-						{loadingAuthAction ? 'Disconnecting...' : 'Disconnect'}
-					</Button>
-				</Dialog.Footer>
 			{:else}
 				<Dialog.Footer>
 					<Button

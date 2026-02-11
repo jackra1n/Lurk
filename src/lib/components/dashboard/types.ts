@@ -26,7 +26,7 @@ export interface StreamerRuntimeState {
 	isWatched: boolean;
 }
 
-export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive';
+export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'priority';
 export type SortDir = 'asc' | 'desc';
 
 export interface ChannelPointsControls {

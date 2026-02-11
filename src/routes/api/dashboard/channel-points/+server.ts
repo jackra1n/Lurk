@@ -9,7 +9,7 @@ import {
 const dayMs = 24 * 60 * 60 * 1000;
 const maxRangeMs = 90 * dayMs;
 const defaultRangeMs = dayMs;
-const sortByValues: ChannelPointsSortBy[] = ['name', 'points', 'lastActive'];
+const sortByValues: ChannelPointsSortBy[] = ['name', 'points', 'lastActive', 'priority'];
 const sortDirValues: SortDir[] = ['asc', 'desc'];
 
 const asNumber = (value: string | null) => {

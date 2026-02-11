@@ -3,7 +3,7 @@ import { getStreamers } from '$lib/server/config';
 import { getDatabase } from './client';
 import { balanceSamples, channelPointEvents, minerRuns, streamers } from './schema';
 
-export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive';
+export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'priority';
 export type SortDir = 'asc' | 'desc';
 
 export interface StreamerAnalyticsItem {
@@ -49,6 +49,18 @@ const compareNullableNumbers = (left: number | null, right: number | null, dir: 
 
 const compareByName = (left: string, right: string, dir: SortDir) =>
 	dir === 'asc' ? left.localeCompare(right) : right.localeCompare(left);
+
+const comparePriority = (
+	leftLogin: string,
+	rightLogin: string,
+	priorityIndexByLogin: Map<string, number>,
+	dir: SortDir
+) => {
+	const leftIndex = priorityIndexByLogin.get(leftLogin) ?? Number.MAX_SAFE_INTEGER;
+	const rightIndex = priorityIndexByLogin.get(rightLogin) ?? Number.MAX_SAFE_INTEGER;
+	const byIndex = compareNumbers(leftIndex, rightIndex, dir);
+	return byIndex !== 0 ? byIndex : leftLogin.localeCompare(rightLogin);
+};
 
 const dedupeConsecutiveBalances = (samples: ChannelPointSample[]) =>
 	samples.reduce<ChannelPointSample[]>((acc, sample) => {
@@ -125,6 +137,7 @@ export const getChannelPointsAnalytics = ({
 }: ChannelPointsAnalyticsInput): ChannelPointsAnalyticsResult => {
 	const db = getDatabase();
 	const configuredLogins = getStreamers();
+	const priorityIndexByLogin = new Map(configuredLogins.map((login, index) => [login, index]));
 
 	const summary = {
 		trackedChannels: configuredLogins.length,
@@ -194,6 +207,7 @@ export const getChannelPointsAnalytics = ({
 	});
 
 	items.sort((left, right) => {
+		if (sortBy === 'priority') return comparePriority(left.login, right.login, priorityIndexByLogin, sortDir);
 		if (sortBy === 'name') return compareByName(left.login, right.login, sortDir);
 		if (sortBy === 'points') return compareNumbers(left.latestBalance, right.latestBalance, sortDir);
 		return compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir);

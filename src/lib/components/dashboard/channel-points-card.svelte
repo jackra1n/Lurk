@@ -43,11 +43,12 @@
 			color: 'var(--chart-1)'
 		}
 	} satisfies ChartConfig;
-	const sortOptions: ChannelPointsSortBy[] = ['lastActive', 'name', 'points'];
+	const sortOptions: ChannelPointsSortBy[] = ['lastActive', 'name', 'points', 'priority'];
 	const sortLabels = {
 		lastActive: 'Last Active',
 		name: 'Name',
-		points: 'Points'
+		points: 'Points',
+		priority: 'Priority'
 	} satisfies Record<ChannelPointsSortBy, string>;
 
 	const relativeTime = (timestampMs: number | null) => {

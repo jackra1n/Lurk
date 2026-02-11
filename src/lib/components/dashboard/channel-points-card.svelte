@@ -225,7 +225,7 @@
 									yAxis: { format: formatYAxisTick, tickSpacing: 56 },
 									area: {
 										curve: curveLinear,
-										'fill-opacity': 1,
+										'fill-opacity': 0.4,
 										line: { class: 'stroke-1' },
 										motion: 'tween'
 									}

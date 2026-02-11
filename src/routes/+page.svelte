@@ -41,7 +41,8 @@
 		running: false,
 		lifecycle: 'auth_required',
 		reason: 'missing_token',
-		configuredStreamers: []
+		configuredStreamers: [],
+		streamerRuntimeStates: []
 	};
 
 	const quickActions = ['Start Miner', 'Add Streamer'];
@@ -162,6 +163,7 @@
 		const nextLifecycle = (payload as { lifecycle?: unknown }).lifecycle;
 		const nextReason = (payload as { reason?: unknown }).reason;
 		const configuredStreamers = (payload as { configuredStreamers?: unknown }).configuredStreamers;
+		const streamerRuntimeStates = (payload as { streamerRuntimeStates?: unknown }).streamerRuntimeStates;
 
 		return {
 			running: Boolean((payload as { running?: unknown }).running),
@@ -169,6 +171,20 @@
 			reason: isReason(nextReason) ? nextReason : null,
 			configuredStreamers: Array.isArray(configuredStreamers)
 				? configuredStreamers.filter((value): value is string => typeof value === 'string')
+				: [],
+			streamerRuntimeStates: Array.isArray(streamerRuntimeStates)
+				? streamerRuntimeStates.flatMap((value) => {
+						if (!value || typeof value !== 'object') return [];
+						const login = (value as { login?: unknown }).login;
+						if (typeof login !== 'string') return [];
+						return [
+							{
+								login,
+								isOnline: Boolean((value as { isOnline?: unknown }).isOnline),
+								isWatched: Boolean((value as { isWatched?: unknown }).isWatched)
+							}
+						];
+					})
 				: []
 		} satisfies MinerStatusResponse;
 	};
@@ -377,6 +393,8 @@
 				loading={analyticsLoading}
 				errorMessage={analyticsErrorMessage}
 				controls={analyticsControls}
+				streamerRuntimeStates={minerStatus.streamerRuntimeStates}
+				minerRunning={minerStatus.running}
 				onControlChange={handleChannelPointsControlChange}
 			/>
 		</section>

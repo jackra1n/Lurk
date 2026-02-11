@@ -51,6 +51,7 @@ function getStartStatusCode(reason: MinerStartReason): number {
 
 export const GET: RequestHandler = async () => {
 	const status = minerService.getStatus();
+	const streamerRuntimeStates = minerService.getStreamerRuntimeStates();
 	const auth = twitchAuth.getStatus();
 	const { lifecycle, reason } = getLifecycle();
 
@@ -60,7 +61,8 @@ export const GET: RequestHandler = async () => {
 		reason,
 		auth,
 		hasAuthToken: !!twitchAuth.getAuthToken(),
-		configuredStreamers: getStreamers()
+		configuredStreamers: getStreamers(),
+		streamerRuntimeStates
 	});
 };
 

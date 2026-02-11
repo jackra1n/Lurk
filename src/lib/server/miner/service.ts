@@ -1,9 +1,10 @@
 import { twitchClient, encodeMinuteWatchedPayload } from '$lib/server/twitch';
 import { twitchPubSub } from '$lib/server/pubsub';
 import { twitchAuth } from '$lib/server/auth';
+import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
-import type { StreamerState, MinerStatus, MinerStartResult } from './types';
+import type { StreamerState, StreamerRuntimeState, MinerStatus, MinerStartResult } from './types';
 import { handlePubSubMessage, type EventHandlerDeps, type MessageDedup } from './events';
 import {
 	syncStreamers,
@@ -359,6 +360,30 @@ class MinerService {
 			pubsubConnected: twitchPubSub.isConnectedToPubSub(),
 			userId: this.userId
 		};
+	}
+
+	getStreamerRuntimeStates(): StreamerRuntimeState[] {
+		const configuredStreamers = getStreamers();
+		if (!this.running) {
+			return configuredStreamers.map((login) => ({
+				login,
+				isOnline: false,
+				isWatched: false
+			}));
+		}
+
+		const watched = new Set(
+			selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS).map((streamer) => streamer.name)
+		);
+
+		return configuredStreamers.map((login) => {
+			const state = this.streamerStates.get(login);
+			return {
+				login,
+				isOnline: Boolean(state?.isLive),
+				isWatched: watched.has(login)
+			};
+		});
 	}
 
 	isRunning(): boolean {

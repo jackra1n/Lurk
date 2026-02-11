@@ -39,6 +39,12 @@ export interface StreamerState {
 	stream: StreamData;
 }
 
+export interface StreamerRuntimeState {
+	login: string;
+	isOnline: boolean;
+	isWatched: boolean;
+}
+
 export interface MinerStatus {
 	running: boolean;
 	startedAt: Date | null;

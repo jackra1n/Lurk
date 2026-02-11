@@ -16,6 +16,7 @@
 		ChannelPointsControlChange,
 		ChannelPointsControls,
 		ChannelPointsSortBy,
+		StreamerRuntimeState
 	} from './types';
 
 	let {
@@ -23,12 +24,16 @@
 		loading = false,
 		errorMessage = null,
 		controls,
+		streamerRuntimeStates = [],
+		minerRunning = false,
 		onControlChange
 	}: {
 		analytics: ChannelPointsAnalyticsResponse | null;
 		loading?: boolean;
 		errorMessage?: string | null;
 		controls: ChannelPointsControls;
+		streamerRuntimeStates?: StreamerRuntimeState[];
+		minerRunning?: boolean;
 		onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
 	} = $props();
 
@@ -91,6 +96,27 @@
 	const selectedStreamer = $derived(
 		analytics?.streamers.find((streamer) => streamer.login === analytics.selectedStreamerLogin) ?? null
 	);
+	const runtimeStateByLogin = $derived(
+		new Map(streamerRuntimeStates.map((streamerState) => [streamerState.login, streamerState]))
+	);
+
+	const streamerDotClass = (streamerState?: StreamerRuntimeState) => {
+		if (!minerRunning) return 'bg-muted-foreground/60';
+		if (streamerState?.isWatched) return 'bg-sky-400';
+		if (streamerState?.isOnline) return 'bg-emerald-500';
+		return 'bg-red-500';
+	};
+
+	const streamerDotLabel = (streamerState?: StreamerRuntimeState) => {
+		if (streamerState?.isWatched) return 'Watching';
+		if (streamerState?.isOnline) return 'Online';
+		return 'Offline';
+	};
+
+	const streamerDotTooltip = (streamerState?: StreamerRuntimeState) => {
+		if (!minerRunning) return "Streamer status is not updated while the miner service isn't running.";
+		return streamerDotLabel(streamerState);
+	};
 </script>
 
 <Card class="bg-card/80">
@@ -179,6 +205,7 @@
 					<ScrollArea class="h-[360px]">
 						<div class="space-y-1">
 							{#each analytics.streamers as streamer (streamer.login)}
+								{@const streamerState = runtimeStateByLogin.get(streamer.login)}
 								<button
 									type="button"
 									class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
@@ -188,10 +215,19 @@
 									}`}
 									onclick={() => onControlChange({ type: 'selectStreamer', login: streamer.login })}
 								>
-									<p class="text-sm font-medium">{streamer.login}</p>
-									<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-										<span>{streamer.latestBalance.toLocaleString()} pts</span>
-										<span class="text-right">{relativeTime(streamer.lastActiveAtMs)}</span>
+									<div class="flex items-center gap-2.5">
+										<span
+											class={`size-2 shrink-0 rounded-full ${streamerDotClass(streamerState)}`}
+											title={streamerDotTooltip(streamerState)}
+											aria-hidden="true"
+										></span>
+										<div class="min-w-0 flex-1">
+											<p class="text-sm font-medium">{streamer.login}</p>
+											<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+												<span>{streamer.latestBalance.toLocaleString()} pts</span>
+												<span class="text-right">{relativeTime(streamer.lastActiveAtMs)}</span>
+											</div>
+										</div>
 									</div>
 								</button>
 							{/each}

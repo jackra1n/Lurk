@@ -17,6 +17,13 @@ export interface MinerStatusResponse {
 	lifecycle: MinerLifecycle;
 	reason: LifecycleReason;
 	configuredStreamers: string[];
+	streamerRuntimeStates: StreamerRuntimeState[];
+}
+
+export interface StreamerRuntimeState {
+	login: string;
+	isOnline: boolean;
+	isWatched: boolean;
 }
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive';

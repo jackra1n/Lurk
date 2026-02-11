@@ -4,6 +4,7 @@ export const OAUTH_DEVICE_URL = 'https://id.twitch.tv/oauth2/device';
 export const OAUTH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 
 export const CLIENT_ID = 'ue6666qo983tsx6so1t0vnawi233wa'; // Android TV client
+export const CLIENT_VERSION_FALLBACK = 'ef928475-9403-42f2-8a34-55784bd08e16';
 
 // OAuth scopes needed for mining
 export const OAUTH_SCOPES = 'channel_read chat:read user_blocks_edit user_blocks_read user_follows_edit user_read';

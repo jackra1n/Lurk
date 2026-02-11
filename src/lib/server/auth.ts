@@ -132,7 +132,7 @@ class TwitchAuth {
 		savePersistedAuth(this.persisted);
 	}
 
-	private getDeviceId(): string {
+	getDeviceId(): string {
 		if (!this.persisted.deviceId) {
 			this.persisted.deviceId = this.generateDeviceId();
 			this.save();

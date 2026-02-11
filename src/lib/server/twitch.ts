@@ -1,5 +1,9 @@
-import { GQL_URL, CLIENT_ID, GQL_OPERATIONS, USER_AGENT } from './constants';
+import { randomBytes } from 'crypto';
+import { GQL_URL, CLIENT_ID, CLIENT_VERSION_FALLBACK, GQL_OPERATIONS, USER_AGENT } from './constants';
 import { getLogger } from './logger';
+
+const VERSION_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
 
 const logger = getLogger('TwitchClient');
 
@@ -38,9 +42,17 @@ interface GqlResponse<T = unknown> {
 
 export class TwitchClient {
 	private authToken: string | null = null;
+	private deviceId = '';
+	private clientSessionId = randomBytes(16).toString('hex');
+	private clientVersion = CLIENT_VERSION_FALLBACK;
+	private lastVersionFetch = 0;
 
 	setAuthToken(token: string): void {
 		this.authToken = token;
+	}
+
+	setDeviceId(id: string): void {
+		this.deviceId = id;
 	}
 
 	getAuthToken(): string | null {
@@ -51,9 +63,44 @@ export class TwitchClient {
 		return this.authToken !== null && this.authToken.length > 0;
 	}
 
+	// fetch the current Twitch client version (twilightBuildID) from twitch.tv
+	private async fetchClientVersion(force = false): Promise<string> {
+		const now = Date.now();
+		if (!force && now - this.lastVersionFetch < VERSION_REFRESH_INTERVAL_MS) {
+			return this.clientVersion;
+		}
+
+		try {
+			const response = await fetch('https://www.twitch.tv', {
+				headers: { 'User-Agent': USER_AGENT }
+			});
+
+			if (!response.ok) {
+				logger.debug({ status: response.status }, 'Failed to fetch twitch.tv for client version');
+				return this.clientVersion;
+			}
+
+			const html = await response.text();
+			const match = html.match(TWITCH_BUILD_ID_PATTERN);
+			if (!match) {
+				logger.debug('Could not find twilightBuildID in twitch.tv HTML');
+				return this.clientVersion;
+			}
+
+			this.clientVersion = match[1];
+			this.lastVersionFetch = now;
+			logger.debug({ clientVersion: this.clientVersion }, 'Updated client version');
+			return this.clientVersion;
+		} catch (error) {
+			logger.debug({ err: error }, 'Error fetching client version');
+			return this.clientVersion;
+		}
+	}
+
 	private async postGqlRequest<T = unknown>(
 		operation: (typeof GQL_OPERATIONS)[keyof typeof GQL_OPERATIONS],
-		variables?: Record<string, unknown>
+		variables?: Record<string, unknown>,
+		_retried = false
 	): Promise<GqlResponse<T>> {
 		if (!this.authToken) {
 			throw new Error('Not authenticated');
@@ -65,11 +112,17 @@ export class TwitchClient {
 		};
 
 		try {
+			const clientVersion = await this.fetchClientVersion();
+
 			const response = await fetch(GQL_URL, {
 				method: 'POST',
 				headers: {
 					Authorization: `OAuth ${this.authToken}`,
 					'Client-Id': CLIENT_ID,
+					'Client-Version': clientVersion,
+					'Client-Session-Id': this.clientSessionId,
+					'User-Agent': USER_AGENT,
+					'X-Device-Id': this.deviceId,
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify(body)
@@ -80,7 +133,22 @@ export class TwitchClient {
 				return { errors: [{ message: `HTTP ${response.status}` }] };
 			}
 
-			return await response.json();
+			const result: GqlResponse<T> = await response.json();
+
+			// try to auto-recover from stale persisted query hashes by refreshing client version
+			if (
+				!_retried &&
+				result.errors?.some((e) => e.message === 'PersistedQueryNotFound')
+			) {
+				logger.warn(
+					{ operation: operation.operationName },
+					'PersistedQueryNotFound - refreshing client version and retrying'
+				);
+				await this.fetchClientVersion(true);
+				return this.postGqlRequest<T>(operation, variables, true);
+			}
+
+			return result;
 		} catch (error) {
 			logger.error({ err: error }, 'GQL request error');
 			return { errors: [{ message: String(error) }] };

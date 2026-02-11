@@ -27,9 +27,9 @@
 
 	const minerStatusDotClass = () => {
 		if (minerStatus.running) return 'bg-emerald-500';
+		if (minerStatus.lifecycle === 'error') return 'bg-red-500';
 		if (minerStatus.lifecycle === 'authenticating') return 'bg-amber-400';
-		if (minerStatus.lifecycle === 'ready') return 'bg-amber-400';
-		return 'bg-red-500';
+		return 'bg-muted-foreground/60';
 	};
 
 	const minerStatusTooltip = () => {

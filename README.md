@@ -28,6 +28,18 @@ Lurk stores miner analytics in SQLite at `data/lurk.sqlite`.
   - `bun run db:migrate`
   - `bun run db:studio`
 
+## Config
+
+Runtime config lives in `config.json`.
+Use `example.config.json` as the starting template:
+
+```bash
+cp example.config.json config.json
+```
+
+- `streamers`: channels to monitor.
+- `autoStartMiner`: when `false`, miner startup is skipped on app boot. Manual start via API/UI still works.
+
 ## Notes
 
 - Twitch APIs can change; this project remains best-effort.

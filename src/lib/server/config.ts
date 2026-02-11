@@ -5,10 +5,12 @@ const CONFIG_PATH = join(process.cwd(), 'config.json');
 
 export interface MinerConfig {
 	streamers: string[];
+	autoStartMiner: boolean;
 }
 
 const defaultConfig: MinerConfig = {
-	streamers: []
+	streamers: [],
+	autoStartMiner: true
 };
 
 function loadConfig(): MinerConfig {
@@ -19,7 +21,17 @@ function loadConfig(): MinerConfig {
 
 	try {
 		const raw = readFileSync(CONFIG_PATH, 'utf-8');
-		return { ...defaultConfig, ...JSON.parse(raw) };
+		const parsed = JSON.parse(raw) as { streamers?: unknown; autoStartMiner?: unknown };
+		const streamers = Array.isArray(parsed.streamers)
+			? parsed.streamers
+					.filter((streamer): streamer is string => typeof streamer === 'string')
+					.map((streamer) => streamer.toLowerCase())
+			: defaultConfig.streamers;
+		const autoStartMiner =
+			typeof parsed.autoStartMiner === 'boolean'
+				? parsed.autoStartMiner
+				: defaultConfig.autoStartMiner;
+		return { streamers, autoStartMiner };
 	} catch {
 		return defaultConfig;
 	}
@@ -37,6 +49,10 @@ export function getConfig(): MinerConfig {
 
 export function getStreamers(): string[] {
 	return config.streamers;
+}
+
+export function getAutoStartMiner(): boolean {
+	return config.autoStartMiner;
 }
 
 export function addStreamer(name: string): void {

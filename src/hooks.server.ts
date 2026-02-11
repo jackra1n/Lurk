@@ -2,6 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { minerService } from '$lib/server/miner';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
+import { getAutoStartMiner } from '$lib/server/config';
 
 let initialized = false;
 const logger = getLogger('Hooks');
@@ -12,6 +13,10 @@ async function initializeMiner(): Promise<void> {
 
 	logger.info('Initializing Twitch Points Miner...');
 	eventStore.initialize();
+	if (!getAutoStartMiner()) {
+		logger.info({ startup: 'disabled' }, 'Miner initialization skipped (auto-start disabled)');
+		return;
+	}
 
 	const result = await minerService.start();
 	if (result.success) {

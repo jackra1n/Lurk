@@ -4,6 +4,7 @@ export const OAUTH_DEVICE_URL = 'https://id.twitch.tv/oauth2/device';
 export const OAUTH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 
 export const CLIENT_ID = 'ue6666qo983tsx6so1t0vnawi233wa'; // Android TV client
+export const CLIENT_VERSION_FALLBACK = 'ef928475-9403-42f2-8a34-55784bd08e16';
 
 // OAuth scopes needed for mining
 export const OAUTH_SCOPES = 'channel_read chat:read user_blocks_edit user_blocks_read user_follows_edit user_read';
@@ -45,7 +46,7 @@ export const GQL_OPERATIONS = {
 		extensions: {
 			persistedQuery: {
 				version: 1,
-				sha256Hash: 'a5f2e34d626a9f4f5c0204f910bab2194948a9502089be558bb6e779a9e1b3d2'
+				sha256Hash: '198492e0857f6aedead9665c81c5a06d67b25b58034649687124083ff288597d'
 			}
 		}
 	},

@@ -179,6 +179,7 @@ class MinerService {
 		}
 
 		twitchClient.setAuthToken(authToken);
+		twitchClient.setDeviceId(twitchAuth.getDeviceId());
 		twitchPubSub.setAuthToken(authToken);
 
 		// Validate token and get user ID

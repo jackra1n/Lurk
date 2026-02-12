@@ -1,5 +1,7 @@
 <script lang="ts">
+	import Github from '@lucide/svelte/icons/github';
 	import { onMount } from 'svelte';
+	import { Button } from '$lib/components/ui/button';
 	import HeaderSection from '../header/HeaderSection.svelte';
 	import PointsOverview from '../channel-points/PointsOverview.svelte';
 	import QuickActionsCard from '../quick-actions/QuickActionsCard.svelte';
@@ -392,8 +394,8 @@
 	};
 </script>
 
-<div class="relative min-h-screen overflow-hidden bg-background text-foreground">
-	<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+<div class="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
+	<main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
 		<HeaderSection
 			{authStatus}
 			{loadingStartAfterAuth}
@@ -435,4 +437,21 @@
 			onStop={handleStopMiner}
 		/>
 	</main>
+
+	<footer class="border-t border-border/60">
+		<div class="mx-auto flex w-full max-w-6xl justify-center px-4 py-4 sm:justify-end sm:px-6 lg:px-8">
+			<Button
+				href="https://github.com/jackra1n/Lurk"
+				target="_blank"
+				rel="noreferrer noopener"
+				variant="ghost"
+				size="sm"
+				class="text-muted-foreground hover:text-foreground"
+				aria-label="Open Lurk source code on GitHub"
+			>
+				<Github class="size-4" />
+				Source Code
+			</Button>
+		</div>
+	</footer>
 </div>

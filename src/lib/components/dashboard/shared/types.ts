@@ -28,12 +28,14 @@ export interface StreamerRuntimeState {
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';
 export type SortDir = 'asc' | 'desc';
+export type ChannelPointsRangeSelection = '24h' | '7d' | '30d' | 'calendar';
 
 export interface ChannelPointsControls {
 	sortBy: ChannelPointsSortBy;
 	sortDir: SortDir;
 	rangeFromMs: number;
 	rangeToMs: number;
+	rangeSelection: ChannelPointsRangeSelection;
 }
 
 export type ChannelPointsControlChange =
@@ -52,6 +54,7 @@ export type ChannelPointsControlChange =
 			type: 'range';
 			fromMs: number;
 			toMs: number;
+			selection: ChannelPointsRangeSelection;
 	  };
 
 export interface StreamerAnalyticsItem {

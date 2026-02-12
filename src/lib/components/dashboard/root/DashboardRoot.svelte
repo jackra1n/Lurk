@@ -11,6 +11,7 @@
 		ChannelPointsAnalyticsResponse,
 		ChannelPointsControlChange,
 		ChannelPointsControls,
+		ChannelPointsRangeSelection,
 		ChannelPointsSortBy,
 		LifecycleReason,
 		MinerLifecycle,
@@ -65,6 +66,7 @@
 	let analyticsSortDir = $state<SortDir>('desc');
 	let analyticsRangeToMs = $state(initialAnalyticsRangeToMs);
 	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
+	let analyticsRangeSelection = $state<ChannelPointsRangeSelection>('24h');
 	let selectedStreamerLogin = $state<string | null>(null);
 	let pollIntervalMs = $state(slowPollMs);
 	let minerActionIntent = $state<'start' | 'stop' | null>(null);
@@ -72,7 +74,8 @@
 		sortBy: analyticsSortBy,
 		sortDir: analyticsSortDir,
 		rangeFromMs: analyticsRangeFromMs,
-		rangeToMs: analyticsRangeToMs
+		rangeToMs: analyticsRangeToMs,
+		rangeSelection: analyticsRangeSelection
 	} satisfies ChannelPointsControls);
 	let quickActionsActionPhase = $derived<'idle' | 'starting' | 'stopping'>(
 		minerStatus.lifecycle === 'starting' ||
@@ -409,9 +412,16 @@
 			return;
 		}
 
-		if (analyticsRangeFromMs === change.fromMs && analyticsRangeToMs === change.toMs) return;
+		if (
+			analyticsRangeFromMs === change.fromMs &&
+			analyticsRangeToMs === change.toMs &&
+			analyticsRangeSelection === change.selection
+		) {
+			return;
+		}
 		analyticsRangeFromMs = change.fromMs;
 		analyticsRangeToMs = change.toMs;
+		analyticsRangeSelection = change.selection;
 		await refreshAnalytics(true);
 	};
 </script>

@@ -58,7 +58,9 @@
 				<DateRangePicker
 					rangeFromMs={controls.rangeFromMs}
 					rangeToMs={controls.rangeToMs}
-					onApply={({ fromMs, toMs }) => onControlChange({ type: 'range', fromMs, toMs })}
+					rangeSelection={controls.rangeSelection}
+					onApply={({ fromMs, toMs, selection }) =>
+						onControlChange({ type: 'range', fromMs, toMs, selection })}
 					disabled={loading && !analytics}
 				/>
 			</div>

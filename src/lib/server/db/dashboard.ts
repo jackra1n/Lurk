@@ -36,6 +36,7 @@ interface ChannelPointsAnalyticsInput {
 	sortBy: ChannelPointsSortBy;
 	sortDir: SortDir;
 	onlineStreamers?: ReadonlySet<string>;
+	watchedStreamers?: ReadonlySet<string>;
 	requestTimestampMs?: number;
 	selectedStreamerLogin?: string | null;
 }
@@ -63,6 +64,16 @@ const comparePriority = (
 	const rightIndex = priorityIndexByLogin.get(rightLogin) ?? Number.MAX_SAFE_INTEGER;
 	const byIndex = compareNumbers(leftIndex, rightIndex, dir);
 	return byIndex !== 0 ? byIndex : leftLogin.localeCompare(rightLogin);
+};
+
+const getStreamerActivityGroup = (
+	login: string,
+	onlineStreamers: ReadonlySet<string>,
+	watchedStreamers: ReadonlySet<string>
+) => {
+	if (watchedStreamers.has(login)) return 0;
+	if (onlineStreamers.has(login)) return 1;
+	return 2;
 };
 
 const dedupeConsecutiveBalances = (samples: ChannelPointSample[]) =>
@@ -137,6 +148,7 @@ export const getChannelPointsAnalytics = ({
 	sortBy,
 	sortDir,
 	onlineStreamers = new Set<string>(),
+	watchedStreamers = new Set<string>(),
 	requestTimestampMs = Date.now(),
 	selectedStreamerLogin
 }: ChannelPointsAnalyticsInput): ChannelPointsAnalyticsResult => {
@@ -218,8 +230,24 @@ export const getChannelPointsAnalytics = ({
 		if (sortBy === 'priority') return comparePriority(left.login, right.login, priorityIndexByLogin, sortDir);
 		if (sortBy === 'name') return compareByName(left.login, right.login, sortDir);
 		if (sortBy === 'points') return compareNumbers(left.latestBalance, right.latestBalance, sortDir);
-		if (sortBy === 'lastWatched') return compareNullableNumbers(left.lastWatchedAtMs, right.lastWatchedAtMs, sortDir);
-		return compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir);
+		if (sortBy === 'lastWatched' || sortBy === 'lastActive') {
+			const leftGroup = getStreamerActivityGroup(left.login, onlineStreamers, watchedStreamers);
+			const rightGroup = getStreamerActivityGroup(right.login, onlineStreamers, watchedStreamers);
+			const byGroup = leftGroup - rightGroup;
+			if (byGroup !== 0) return byGroup;
+
+			if (leftGroup === 0) {
+				const byWatchedName = compareByName(left.login, right.login, sortDir);
+				return byWatchedName !== 0 ? byWatchedName : left.login.localeCompare(right.login);
+			}
+
+			const leftTimestamp = sortBy === 'lastActive' ? left.lastActiveAtMs : left.lastWatchedAtMs;
+			const rightTimestamp = sortBy === 'lastActive' ? right.lastActiveAtMs : right.lastWatchedAtMs;
+			const byTimestamp = compareNullableNumbers(leftTimestamp, rightTimestamp, sortDir);
+			return byTimestamp !== 0 ? byTimestamp : left.login.localeCompare(right.login);
+		}
+
+		return 0;
 	});
 
 	const selected = selectedStreamerLogin

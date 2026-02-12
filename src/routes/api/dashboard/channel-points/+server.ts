@@ -41,11 +41,12 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	const effectiveFromMs = Math.max(fromMs, toMs - maxRangeMs);
+	const runtimeStates = minerService.getStreamerRuntimeStates();
 	const onlineStreamers = new Set(
-		minerService
-			.getStreamerRuntimeStates()
-			.filter((streamerState) => streamerState.isOnline)
-			.map((streamerState) => streamerState.login)
+		runtimeStates.filter((streamerState) => streamerState.isOnline).map((streamerState) => streamerState.login)
+	);
+	const watchedStreamers = new Set(
+		runtimeStates.filter((streamerState) => streamerState.isWatched).map((streamerState) => streamerState.login)
 	);
 	const analytics = getChannelPointsAnalytics({
 		fromMs: effectiveFromMs,
@@ -53,6 +54,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		sortBy,
 		sortDir,
 		onlineStreamers,
+		watchedStreamers,
 		requestTimestampMs: now,
 		selectedStreamerLogin
 	});

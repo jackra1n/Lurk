@@ -16,7 +16,6 @@
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.10.0",
-		"@libsql/client": "^0.17.0",
 		"@lucide/svelte": "^0.563.1",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.49.1",

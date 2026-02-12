@@ -1,0 +1,10 @@
+services:
+  lurk:
+    image: ${LURK_IMAGE:-ghcr.io/jackra1n/lurk:latest}
+    container_name: lurk
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

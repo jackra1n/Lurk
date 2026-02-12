@@ -47,6 +47,15 @@ cp example.config.json data/config.json
 - `streamers`: channels to monitor.
 - `autoStartMiner`: when `false`, miner startup is skipped on app boot. Manual start via API/UI still works.
 
+## Docker Compose (Example)
+
+Start from `compose.example.yaml`:
+
+```bash
+cp compose.example.yaml compose.yaml
+docker compose up -d
+```
+
 ## Notes
 
 - Twitch APIs can change; this project remains best-effort.

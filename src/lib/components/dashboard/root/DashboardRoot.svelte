@@ -61,7 +61,7 @@
 	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
 	let analyticsLoading = $state(false);
 	let analyticsErrorMessage = $state<string | null>(null);
-	let analyticsSortBy = $state<ChannelPointsSortBy>('lastActive');
+	let analyticsSortBy = $state<ChannelPointsSortBy>('lastWatched');
 	let analyticsSortDir = $state<SortDir>('desc');
 	let analyticsRangeToMs = $state(initialAnalyticsRangeToMs);
 	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);

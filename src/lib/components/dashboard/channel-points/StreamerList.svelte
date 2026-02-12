@@ -28,9 +28,10 @@
 		onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
 	} = $props();
 
-	const sortOptions: ChannelPointsSortBy[] = ['lastActive', 'name', 'points', 'priority'];
+	const sortOptions: ChannelPointsSortBy[] = ['lastActive', 'lastWatched', 'name', 'points', 'priority'];
 	const sortLabels = {
 		lastActive: 'Last Active',
+		lastWatched: 'Last Watched',
 		name: 'Name',
 		points: 'Points',
 		priority: 'Priority'
@@ -107,6 +108,7 @@
 		<div class="space-y-1">
 			{#each streamers as streamer (streamer.login)}
 				{@const streamerState = runtimeStateByLogin.get(streamer.login)}
+				{@const timestampMs = controls.sortBy === 'lastWatched' ? streamer.lastWatchedAtMs : streamer.lastActiveAtMs}
 				<button
 					type="button"
 					class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
@@ -135,7 +137,7 @@
 							<p class="text-sm font-medium">{streamer.login}</p>
 							<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
 								<span>{streamer.latestBalance.toLocaleString()} pts</span>
-								<span class="text-right">{relativeTime(streamer.lastActiveAtMs)}</span>
+								<span class="text-right">{relativeTime(timestampMs)}</span>
 							</div>
 						</div>
 					</div>

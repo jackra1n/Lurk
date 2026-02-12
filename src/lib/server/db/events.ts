@@ -20,6 +20,7 @@ type EventType =
 	| 'claim_failed'
 	| 'points_earned'
 	| 'minute_watched_tick'
+	| 'minute_watched_tick_failed'
 	| 'context_snapshot';
 
 type EventSource = 'pubsub' | 'gql_context' | 'gql_stream' | 'spade' | 'system';

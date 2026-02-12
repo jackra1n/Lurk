@@ -5,11 +5,12 @@ import {
 	type ChannelPointsSortBy,
 	type SortDir
 } from '$lib/server/db/dashboard';
+import { minerService } from '$lib/server/miner';
 
 const dayMs = 24 * 60 * 60 * 1000;
 const maxRangeMs = 90 * dayMs;
 const defaultRangeMs = dayMs;
-const sortByValues: ChannelPointsSortBy[] = ['name', 'points', 'lastActive', 'priority'];
+const sortByValues: ChannelPointsSortBy[] = ['name', 'points', 'lastActive', 'lastWatched', 'priority'];
 const sortDirValues: SortDir[] = ['asc', 'desc'];
 
 const asNumber = (value: string | null) => {
@@ -40,11 +41,19 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	const effectiveFromMs = Math.max(fromMs, toMs - maxRangeMs);
+	const onlineStreamers = new Set(
+		minerService
+			.getStreamerRuntimeStates()
+			.filter((streamerState) => streamerState.isOnline)
+			.map((streamerState) => streamerState.login)
+	);
 	const analytics = getChannelPointsAnalytics({
 		fromMs: effectiveFromMs,
 		toMs,
 		sortBy,
 		sortDir,
+		onlineStreamers,
+		requestTimestampMs: now,
 		selectedStreamerLogin
 	});
 

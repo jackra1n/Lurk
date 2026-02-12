@@ -328,7 +328,7 @@ class MinerService {
 								login: state.name,
 								channelId: state.channelId
 							},
-							eventType: 'minute_watched_tick',
+							eventType: 'minute_watched_tick_failed',
 							source: 'spade',
 							broadcastId: state.stream.broadcastId,
 							viewersCount: state.stream.viewers,

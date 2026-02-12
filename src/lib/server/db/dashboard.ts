@@ -3,7 +3,7 @@ import { getStreamers } from '$lib/server/config';
 import { getDatabase } from './client';
 import { balanceSamples, channelPointEvents, minerRuns, streamers } from './schema';
 
-export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'priority';
+export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';
 export type SortDir = 'asc' | 'desc';
 
 export interface StreamerAnalyticsItem {
@@ -12,6 +12,7 @@ export interface StreamerAnalyticsItem {
 	latestBalance: number;
 	pointsEarned: number;
 	lastActiveAtMs: number | null;
+	lastWatchedAtMs: number | null;
 }
 
 export interface ChannelPointSample {
@@ -34,6 +35,8 @@ interface ChannelPointsAnalyticsInput {
 	toMs: number;
 	sortBy: ChannelPointsSortBy;
 	sortDir: SortDir;
+	onlineStreamers?: ReadonlySet<string>;
+	requestTimestampMs?: number;
 	selectedStreamerLogin?: string | null;
 }
 
@@ -133,6 +136,8 @@ export const getChannelPointsAnalytics = ({
 	toMs,
 	sortBy,
 	sortDir,
+	onlineStreamers = new Set<string>(),
+	requestTimestampMs = Date.now(),
 	selectedStreamerLogin
 }: ChannelPointsAnalyticsInput): ChannelPointsAnalyticsResult => {
 	const db = getDatabase();
@@ -175,7 +180,8 @@ export const getChannelPointsAnalytics = ({
 					.select({
 						streamerId: channelPointEvents.streamerId,
 						pointsEarned: sql<number>`coalesce(sum(${channelPointEvents.pointsDelta}), 0)`,
-						lastActiveAtMs: sql<number | null>`max(${channelPointEvents.occurredAtMs})`
+						lastOfflineAtMs: sql<number | null>`max(case when ${channelPointEvents.eventType} = 'stream_down' then ${channelPointEvents.occurredAtMs} end)`,
+						lastWatchedAtMs: sql<number | null>`max(case when ${channelPointEvents.eventType} = 'minute_watched_tick' then ${channelPointEvents.occurredAtMs} end)`
 					})
 					.from(channelPointEvents)
 					.where(inArray(channelPointEvents.streamerId, streamerIds))
@@ -188,7 +194,8 @@ export const getChannelPointsAnalytics = ({
 			item.streamerId,
 			{
 				pointsEarned: Number(item.pointsEarned ?? 0),
-				lastActiveAtMs: item.lastActiveAtMs === null ? null : Number(item.lastActiveAtMs)
+				lastOfflineAtMs: item.lastOfflineAtMs === null ? null : Number(item.lastOfflineAtMs),
+				lastWatchedAtMs: item.lastWatchedAtMs === null ? null : Number(item.lastWatchedAtMs)
 			}
 		])
 	);
@@ -202,7 +209,8 @@ export const getChannelPointsAnalytics = ({
 			login,
 			latestBalance: streamer ? getLatestBalanceByStreamerId(streamer.id) : 0,
 			pointsEarned: aggregate?.pointsEarned ?? 0,
-			lastActiveAtMs: aggregate?.lastActiveAtMs ?? null
+			lastActiveAtMs: onlineStreamers.has(login) ? requestTimestampMs : (aggregate?.lastOfflineAtMs ?? null),
+			lastWatchedAtMs: aggregate?.lastWatchedAtMs ?? null
 		} satisfies StreamerAnalyticsItem;
 	});
 
@@ -210,6 +218,7 @@ export const getChannelPointsAnalytics = ({
 		if (sortBy === 'priority') return comparePriority(left.login, right.login, priorityIndexByLogin, sortDir);
 		if (sortBy === 'name') return compareByName(left.login, right.login, sortDir);
 		if (sortBy === 'points') return compareNumbers(left.latestBalance, right.latestBalance, sortDir);
+		if (sortBy === 'lastWatched') return compareNullableNumbers(left.lastWatchedAtMs, right.lastWatchedAtMs, sortDir);
 		return compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir);
 	});
 

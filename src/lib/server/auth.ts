@@ -1,5 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import {
 	CLIENT_ID,
 	OAUTH_DEVICE_URL,
@@ -8,9 +7,8 @@ import {
 	USER_AGENT
 } from './constants';
 import { getLogger } from './logger';
+import { AUTH_PATH, COOKIES_PATH } from './paths';
 
-const AUTH_PATH = join(process.cwd(), 'auth.json');
-const COOKIES_PATH = join(process.cwd(), 'cookies.json');
 const logger = getLogger('Auth');
 
 export interface DeviceCodeResponse {

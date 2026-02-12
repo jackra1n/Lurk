@@ -1,7 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
-
-const CONFIG_PATH = join(process.cwd(), 'config.json');
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { CONFIG_PATH } from './paths';
 
 export interface MinerConfig {
 	streamers: string[];

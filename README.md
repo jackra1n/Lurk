@@ -10,14 +10,14 @@ Not all features are planned to be implemented right away. The current priority 
 
 Server logs use structured logging with colored terminal output and rotating files.
 
-- Log files are written to `logs/`.
+- Log files are written to `./logs/`.
 - Rotation policy is daily with the latest 14 files retained.
 - Default log level is `debug` in development and `info` in production.
 - Override level with `LOG_LEVEL` (`trace`, `debug`, `info`, `warn`, `error`, `fatal`).
 
 ## Database
 
-Lurk stores miner analytics in SQLite at `data/lurk.sqlite`.
+Lurk stores miner analytics in SQLite at `<LURK_DATA_DIR>/lurk.sqlite` (default: `./data/lurk.sqlite`).
 
 - Drizzle owns schema + migration generation (`src/lib/server/db/schema.ts` + `drizzle/`).
 - Migration-based schema is initialized automatically on server startup.
@@ -30,11 +30,19 @@ Lurk stores miner analytics in SQLite at `data/lurk.sqlite`.
 
 ## Config
 
-Runtime config lives in `config.json`.
+Runtime state files live under `<LURK_DATA_DIR>` (default: `./data`):
+
+- `config.json`
+- `auth.json`
+- `cookies.json`
+- `lurk.sqlite`
+
+Runtime config is `<LURK_DATA_DIR>/config.json`.
 Use `example.config.json` as the starting template:
 
 ```bash
-cp example.config.json config.json
+mkdir -p data
+cp example.config.json data/config.json
 ```
 
 - `streamers`: channels to monitor.

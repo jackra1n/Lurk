@@ -1,10 +1,9 @@
 import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import pino from 'pino';
 import pretty from 'pino-pretty';
 import { createStream } from 'rotating-file-stream';
+import { LOG_DIR } from './paths';
 
-const LOG_DIR = join(process.cwd(), 'logs');
 const LOG_FILE = 'lurk.log';
 const LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal']);
 

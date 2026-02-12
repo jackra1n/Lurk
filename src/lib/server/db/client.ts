@@ -1,17 +1,13 @@
-import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import * as schema from './schema';
 import { getLogger } from '$lib/server/logger';
+import { DB_PATH } from '$lib/server/paths';
 
 const logger = getLogger('Database');
-const DATA_DIR = join(process.cwd(), 'data');
-const DB_PATH = join(DATA_DIR, 'lurk.sqlite');
 const MIGRATIONS_DIR = join(process.cwd(), 'drizzle');
-
-mkdirSync(DATA_DIR, { recursive: true });
 
 const sqlite = new Database(DB_PATH, { create: true });
 sqlite.run(`

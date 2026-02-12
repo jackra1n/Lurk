@@ -7,7 +7,7 @@ import {
 	USER_AGENT
 } from './constants';
 import { getLogger } from './logger';
-import { AUTH_PATH, COOKIES_PATH } from './paths';
+import { AUTH_PATH } from './paths';
 
 const logger = getLogger('Auth');
 
@@ -65,27 +65,6 @@ function loadPersistedAuth(): PersistedAuth {
 
 function savePersistedAuth(auth: PersistedAuth): void {
 	writeFileSync(AUTH_PATH, JSON.stringify(auth, null, 2), 'utf-8');
-}
-
-function loadPersistedCookies(): string[] {
-	if (!existsSync(COOKIES_PATH)) {
-		return [];
-	}
-
-	try {
-		const raw = readFileSync(COOKIES_PATH, 'utf-8');
-		const parsed = JSON.parse(raw) as unknown;
-		if (!Array.isArray(parsed)) {
-			return [];
-		}
-		return parsed.filter((cookie): cookie is string => typeof cookie === 'string');
-	} catch {
-		return [];
-	}
-}
-
-function savePersistedCookies(cookies: string[]): void {
-	writeFileSync(COOKIES_PATH, JSON.stringify(cookies, null, 2), 'utf-8');
 }
 
 interface PendingAuth {
@@ -176,14 +155,6 @@ class TwitchAuth {
 
 	getUserId(): string | null {
 		return this.persisted.userId;
-	}
-
-	getCookies(): string[] {
-		return loadPersistedCookies();
-	}
-
-	setCookies(cookies: string[]): void {
-		savePersistedCookies(cookies.filter((cookie): cookie is string => typeof cookie === 'string'));
 	}
 
 	/**
@@ -362,7 +333,6 @@ class TwitchAuth {
 		const previousDeviceId = this.getDeviceId();
 		this.persisted = { ...defaultPersistedAuth, deviceId: previousDeviceId };
 		this.save();
-		savePersistedCookies([]);
 		logger.info('Logged out');
 	}
 }

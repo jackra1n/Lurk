@@ -34,7 +34,6 @@ Runtime state files live under `<LURK_DATA_DIR>` (default: `./data`):
 
 - `config.json`
 - `auth.json`
-- `cookies.json`
 - `lurk.sqlite`
 
 Runtime config is `<LURK_DATA_DIR>/config.json`.

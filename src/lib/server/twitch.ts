@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 import { GQL_URL, CLIENT_ID, CLIENT_VERSION_FALLBACK, GQL_OPERATIONS, USER_AGENT } from './constants';
 import { getLogger } from './logger';
 

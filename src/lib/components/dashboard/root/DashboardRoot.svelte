@@ -42,11 +42,11 @@
 		streamerRuntimeStates: []
 	};
 
-	const quickActions = ['Start Miner', 'Add Streamer'];
 	let isDark = $state(true);
 	let authStatus = $state<AuthStatusResponse>(defaultAuthStatus);
 	let minerStatus = $state<MinerStatusResponse>(defaultMinerStatus);
 	let loadingStartAfterAuth = $state(false);
+	let loadingMinerAction = $state(false);
 	let message = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
 	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
@@ -64,6 +64,14 @@
 		rangeFromMs: analyticsRangeFromMs,
 		rangeToMs: analyticsRangeToMs
 	} satisfies ChannelPointsControls);
+	let quickActionsBusy = $derived(loadingMinerAction || loadingStartAfterAuth);
+	let startMinerDisabled = $derived(
+		loadingMinerAction ||
+		loadingStartAfterAuth ||
+		minerStatus.running ||
+		minerStatus.lifecycle !== 'ready'
+	);
+	let stopMinerDisabled = $derived(loadingMinerAction || !minerStatus.running);
 	let analyticsRequestSeq = 0;
 	let analyticsLoadingRequestSeq = 0;
 
@@ -116,6 +124,27 @@
 		} catch {
 			return null;
 		}
+	};
+
+	const getSuccessMessage = (payload: { message?: unknown }, fallback: string) =>
+		typeof payload.message === 'string' && payload.message.length > 0 ? payload.message : fallback;
+
+	const postMinerAction = async (action: 'start' | 'stop') => {
+		const response = await fetch('/api/miner', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ action })
+		});
+		const payload = await readJson(response);
+		const fallback = action === 'start' ? 'Failed to start miner' : 'Failed to stop miner';
+
+		if (!response.ok || !(payload && typeof payload === 'object' && (payload as { success?: unknown }).success)) {
+			throw new Error(getErrorMessage(payload, fallback));
+		}
+
+		return payload as { message?: unknown };
 	};
 
 	const fetchAuthStatus = async () => {
@@ -284,38 +313,54 @@
 		loadingStartAfterAuth = true;
 
 		try {
-			const response = await fetch('/api/miner', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ action: 'start' })
-			});
-			const payload = await readJson(response);
-
-			if (!response.ok || !(payload && typeof payload === 'object' && (payload as { success?: unknown }).success)) {
-				throw new Error(getErrorMessage(payload, 'Failed to start miner'));
-			}
-
-			message = 'Miner started successfully.';
+			const payload = await postMinerAction('start');
+			message = getSuccessMessage(payload, 'Miner started successfully.');
 			errorMessage = null;
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Failed to start miner';
 		} finally {
 			loadingStartAfterAuth = false;
-			try {
-				await refreshAllStatus({ autoStart: false });
-			} catch (error) {
-				errorMessage = error instanceof Error ? error.message : 'Failed to refresh status';
-			}
+			await refreshStatus();
 		}
 	};
 
-	const refreshStatusAfterAuthAction = async () => {
+	const refreshStatus = async () => {
 		try {
 			await refreshAllStatus({ autoStart: false });
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Failed to refresh status';
+		}
+	};
+
+	const handleStartMiner = async () => {
+		if (startMinerDisabled) return;
+		loadingMinerAction = true;
+
+		try {
+			const payload = await postMinerAction('start');
+			message = getSuccessMessage(payload, 'Miner started successfully.');
+			errorMessage = null;
+		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : 'Failed to start miner';
+		} finally {
+			loadingMinerAction = false;
+			await refreshStatus();
+		}
+	};
+
+	const handleStopMiner = async () => {
+		if (stopMinerDisabled) return;
+		loadingMinerAction = true;
+
+		try {
+			const payload = await postMinerAction('stop');
+			message = getSuccessMessage(payload, 'Miner stopped.');
+			errorMessage = null;
+		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : 'Failed to stop miner';
+		} finally {
+			loadingMinerAction = false;
+			await refreshStatus();
 		}
 	};
 
@@ -353,7 +398,7 @@
 			{authStatus}
 			{loadingStartAfterAuth}
 			{isDark}
-			onAuthStatusChange={refreshStatusAfterAuthAction}
+			onAuthStatusChange={refreshStatus}
 			onToggleTheme={toggleTheme}
 		/>
 
@@ -381,6 +426,13 @@
 			/>
 		</section>
 
-		<QuickActionsCard actions={quickActions} />
+		<QuickActionsCard
+			minerRunning={minerStatus.running}
+			startDisabled={startMinerDisabled}
+			stopDisabled={stopMinerDisabled}
+			busy={quickActionsBusy}
+			onStart={handleStartMiner}
+			onStop={handleStopMiner}
+		/>
 	</main>
 </div>

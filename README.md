@@ -1,61 +1,88 @@
 # Lurk
 
-Lurk is a light Twitch point harvester built with Bun and Svelte.
+## What Lurk Is
 
-This project is based on [Twitch-Channel-Points-Miner-v2](https://github.com/rdavydov/Twitch-Channel-Points-Miner-v2), with a stronger focus on simplicity, efficiency, and performance.
+Lurk is a lightweight Twitch channel points miner with a web UI.
 
-Not all features are planned to be implemented right away. The current priority is reliable channel points mining and a clean, fast analytics UI.
+It is built with Bun + SvelteKit, with an emphasis on efficient runtime behavior and a clear analytics UI.
+This project is inspired by [Twitch-Channel-Points-Miner-v2](https://github.com/rdavydov/Twitch-Channel-Points-Miner-v2).
 
-## Logging
+## Configuration
 
-Server logs use structured logging with colored terminal output and rotating files.
-
-- Log files are written to `./logs/`.
-- Rotation policy is daily with the latest 14 files retained.
-- Default log level is `debug` in development and `info` in production.
-- Override level with `LOG_LEVEL` (`trace`, `debug`, `info`, `warn`, `error`, `fatal`).
-
-## Database
-
-Lurk stores miner analytics in SQLite at `<LURK_DATA_DIR>/lurk.sqlite` (default: `./data/lurk.sqlite`).
-
-- Drizzle owns schema + migration generation (`src/lib/server/db/schema.ts` + `drizzle/`).
-- Migration-based schema is initialized automatically on server startup.
-- Event history is append-oriented for fast timelines and visualizations.
-- Schema details: `docs/database-schema.md`.
-- Useful commands:
-  - `bun run db:generate`
-  - `bun run db:migrate`
-  - `bun run db:studio`
-
-## Config
-
-Runtime state files live under `<LURK_DATA_DIR>` (default: `./data`):
-
-- `config.json`
-- `auth.json`
-- `lurk.sqlite`
-
-Runtime config is `<LURK_DATA_DIR>/config.json`.
-Use `example.config.json` as the starting template:
+Set your tracked streamers in `data/config.json` before starting Lurk.
 
 ```bash
 mkdir -p data
 cp example.config.json data/config.json
 ```
 
-- `streamers`: channels to monitor.
-- `autoStartMiner`: when `false`, miner startup is skipped on app boot. Manual start via API/UI still works.
+Example:
 
-## Docker Compose (Example)
+```json
+{
+  "streamers": [
+    "streamer1",
+    "streamer2",
+    "streamer3"
+  ],
+  "autoStartMiner": true
+}
+```
 
-Start from `compose.example.yaml`:
+- `streamers`: Twitch streamers to track.
+- `autoStartMiner`: if `true`, miner tries to start automatically on boot.
+
+## Quick Start
 
 ```bash
-cp compose.example.yaml compose.yaml
+mkdir -p logs
+cp example.compose.yaml compose.yaml
 docker compose up -d
 ```
 
+Open `http://localhost:3000`.
+
+The example compose file persists:
+- `./data` -> `/data` (runtime state and SQLite database)
+- `./logs` -> `/app/logs` (server logs)
+
+## First-Run Setup in the UI
+
+1. Open the app in your browser.
+2. Start Twitch login from the UI (device flow) and complete verification.
+3. The miner should start automatically after authentication.
+
+## Data and Runtime Files
+
+`<LURK_DATA_DIR>` defaults to `./data` locally and `/data` in the provided container image.
+
+- `<LURK_DATA_DIR>/config.json`: runtime config you edit.
+- `<LURK_DATA_DIR>/auth.json`: stored auth/session state (managed by app).
+- `<LURK_DATA_DIR>/lurk.sqlite`: analytics database (managed by app).
+- `./logs/`: rotating server logs.
+
+If you back up one thing, back up your data directory.
+
+## Deploy and Operate Notes
+
+Environment variables:
+- `LURK_DATA_DIR`: runtime state directory.
+- `LOG_LEVEL`: `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+- `PORT`: HTTP port (default `3000` in container runtime).
+- `HOST`: bind host (default `0.0.0.0` in container runtime).
+
+Health endpoint: `GET /api/health`
+
+## Development
+
+This section is for contributors and local development workflows.
+
+- Database schema docs: `docs/database-schema.md`
+- DB commands:
+  - `bun run db:generate`
+  - `bun run db:migrate`
+  - `bun run db:studio`
+
 ## Notes
 
-- Twitch APIs can change; this project remains best-effort.
+- Twitch APIs can change. Lurk remains best-effort.

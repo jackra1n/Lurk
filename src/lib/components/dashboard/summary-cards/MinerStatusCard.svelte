@@ -6,6 +6,7 @@
 	let { minerStatus }: { minerStatus: MinerStatusResponse } = $props();
 
 	const minerLabel = () => {
+		if (minerStatus.lifecycle === 'starting') return 'Starting';
 		if (minerStatus.running) return 'Running';
 		if (minerStatus.lifecycle === 'authenticating') return 'Waiting';
 		if (minerStatus.lifecycle === 'error') return 'Attention';
@@ -13,6 +14,7 @@
 	};
 
 	const minerDescription = () => {
+		if (minerStatus.lifecycle === 'starting') return 'Starting miner services.';
 		if (minerStatus.running) return 'Monitoring active channels.';
 		if (minerStatus.lifecycle === 'authenticating') return 'Waiting for Twitch authorization.';
 		if (minerStatus.lifecycle === 'ready') return 'Authenticated and ready to start.';
@@ -21,6 +23,7 @@
 	};
 
 	const minerStatusDotClass = () => {
+		if (minerStatus.lifecycle === 'starting') return 'bg-amber-400';
 		if (minerStatus.running) return 'bg-emerald-500';
 		if (minerStatus.lifecycle === 'error') return 'bg-red-500';
 		if (minerStatus.lifecycle === 'authenticating') return 'bg-amber-400';
@@ -28,6 +31,7 @@
 	};
 
 	const minerStatusTooltip = () => {
+		if (minerStatus.lifecycle === 'starting') return 'Miner startup is in progress.';
 		if (minerStatus.running) return 'Miner is running and monitoring configured channels.';
 		if (minerStatus.lifecycle === 'ready') return 'Twitch is connected. Miner can be started now.';
 		if (minerStatus.lifecycle === 'authenticating') return 'Waiting for Twitch device authorization to complete.';

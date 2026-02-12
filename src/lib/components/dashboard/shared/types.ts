@@ -1,4 +1,4 @@
-export type MinerLifecycle = 'running' | 'ready' | 'auth_required' | 'authenticating' | 'error';
+export type MinerLifecycle = 'starting' | 'running' | 'ready' | 'auth_required' | 'authenticating' | 'error';
 
 export type LifecycleReason = 'missing_token' | 'invalid_token' | 'auth_pending' | 'startup_failed' | null;
 

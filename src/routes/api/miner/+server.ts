@@ -4,7 +4,7 @@ import { minerService, type MinerStartReason } from '$lib/server/miner';
 import { addStreamer, removeStreamer, getStreamers } from '$lib/server/config';
 import { twitchAuth } from '$lib/server/auth';
 
-type MinerLifecycle = 'running' | 'ready' | 'auth_required' | 'authenticating' | 'error';
+type MinerLifecycle = 'starting' | 'running' | 'ready' | 'auth_required' | 'authenticating' | 'error';
 type LifecycleReason =
 	| 'missing_token'
 	| 'invalid_token'
@@ -16,6 +16,10 @@ function getLifecycle(): { lifecycle: MinerLifecycle; reason: LifecycleReason } 
 	const authStatus = twitchAuth.getStatus();
 	const minerStatus = minerService.getStatus();
 	const lastStart = minerService.getLastStartResult();
+
+	if (minerStatus.starting) {
+		return { lifecycle: 'starting', reason: null };
+	}
 
 	if (minerStatus.running) {
 		return { lifecycle: 'running', reason: null };

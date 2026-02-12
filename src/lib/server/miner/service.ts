@@ -22,6 +22,7 @@ const logger = getLogger('Miner');
 class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
 	private minuteWatcherInterval: ReturnType<typeof setInterval> | null = null;
+	private starting = false;
 	private running = false;
 	private startedAt: Date | null = null;
 	private tickCount = 0;
@@ -59,6 +60,7 @@ class MinerService {
 		withEventStore('run_stop_failed_start', () => {
 			eventStore.stopRun('startup_failed');
 		});
+		this.starting = false;
 		this.running = false;
 		this.startedAt = null;
 		this.userId = null;
@@ -75,7 +77,7 @@ class MinerService {
 	}
 
 	async start(): Promise<MinerStartResult> {
-		if (this.running) {
+		if (this.running || this.starting) {
 			logger.info('Already running');
 			return this.setStartResult({
 				success: true,
@@ -94,6 +96,7 @@ class MinerService {
 			});
 		}
 
+		this.starting = true;
 		twitchClient.setAuthToken(authToken);
 		twitchClient.setDeviceId(twitchAuth.getDeviceId());
 		twitchPubSub.setAuthToken(authToken);
@@ -103,6 +106,7 @@ class MinerService {
 		if (!isValid) {
 			logger.warn('Cannot start - invalid auth token');
 			twitchAuth.logout();
+			this.starting = false;
 			return this.setStartResult({
 				success: false,
 				reason: 'invalid_token',
@@ -197,6 +201,7 @@ class MinerService {
 		}
 
 		logger.info({ streamerCount: this.streamerStates.size }, 'Started monitoring streamers');
+		this.starting = false;
 		return this.setStartResult({
 			success: true,
 			reason: 'started',
@@ -224,6 +229,7 @@ class MinerService {
 			eventStore.stopRun('stopped');
 		});
 
+		this.starting = false;
 		this.running = false;
 		this.startedAt = null;
 		this.userId = null;
@@ -352,6 +358,7 @@ class MinerService {
 
 	getStatus(): MinerStatus {
 		return {
+			starting: this.starting,
 			running: this.running,
 			startedAt: this.startedAt,
 			streamers: Array.from(this.streamerStates.values()),
@@ -384,10 +391,6 @@ class MinerService {
 				isWatched: watched.has(login)
 			};
 		});
-	}
-
-	isRunning(): boolean {
-		return this.running;
 	}
 
 	getLastStartResult(): MinerStartResult | null {

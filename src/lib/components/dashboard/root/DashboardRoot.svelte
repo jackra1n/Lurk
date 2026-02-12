@@ -21,7 +21,14 @@
 	const themeStorageKey = 'theme';
 	const fastPollMs = 2000;
 	const slowPollMs = 10000;
-	const lifecycleValues: MinerLifecycle[] = ['running', 'ready', 'auth_required', 'authenticating', 'error'];
+	const lifecycleValues: MinerLifecycle[] = [
+		'starting',
+		'running',
+		'ready',
+		'auth_required',
+		'authenticating',
+		'error'
+	];
 	const reasonValues: Exclude<LifecycleReason, null>[] = ['missing_token', 'invalid_token', 'auth_pending', 'startup_failed'];
 	const defaultAnalyticsRangeMs = 24 * 60 * 60 * 1000;
 	const initialAnalyticsRangeToMs = Date.now();
@@ -60,13 +67,22 @@
 	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
 	let selectedStreamerLogin = $state<string | null>(null);
 	let pollIntervalMs = $state(slowPollMs);
+	let minerActionIntent = $state<'start' | 'stop' | null>(null);
 	let analyticsControls = $derived({
 		sortBy: analyticsSortBy,
 		sortDir: analyticsSortDir,
 		rangeFromMs: analyticsRangeFromMs,
 		rangeToMs: analyticsRangeToMs
 	} satisfies ChannelPointsControls);
-	let quickActionsBusy = $derived(loadingMinerAction || loadingStartAfterAuth);
+	let quickActionsActionPhase = $derived<'idle' | 'starting' | 'stopping'>(
+		minerStatus.lifecycle === 'starting' ||
+			loadingStartAfterAuth ||
+			(loadingMinerAction && minerActionIntent === 'start')
+			? 'starting'
+			: loadingMinerAction && minerActionIntent === 'stop'
+				? 'stopping'
+				: 'idle'
+	);
 	let startMinerDisabled = $derived(
 		loadingMinerAction ||
 		loadingStartAfterAuth ||
@@ -312,6 +328,7 @@
 	};
 
 	const startMinerAfterAuth = async () => {
+		minerActionIntent = 'start';
 		loadingStartAfterAuth = true;
 
 		try {
@@ -323,6 +340,7 @@
 		} finally {
 			loadingStartAfterAuth = false;
 			await refreshStatus();
+			minerActionIntent = null;
 		}
 	};
 
@@ -336,6 +354,7 @@
 
 	const handleStartMiner = async () => {
 		if (startMinerDisabled) return;
+		minerActionIntent = 'start';
 		loadingMinerAction = true;
 
 		try {
@@ -347,11 +366,13 @@
 		} finally {
 			loadingMinerAction = false;
 			await refreshStatus();
+			minerActionIntent = null;
 		}
 	};
 
 	const handleStopMiner = async () => {
 		if (stopMinerDisabled) return;
+		minerActionIntent = 'stop';
 		loadingMinerAction = true;
 
 		try {
@@ -363,6 +384,7 @@
 		} finally {
 			loadingMinerAction = false;
 			await refreshStatus();
+			minerActionIntent = null;
 		}
 	};
 
@@ -430,9 +452,10 @@
 
 		<QuickActionsCard
 			minerRunning={minerStatus.running}
+			lifecycle={minerStatus.lifecycle}
 			startDisabled={startMinerDisabled}
 			stopDisabled={stopMinerDisabled}
-			busy={quickActionsBusy}
+			actionPhase={quickActionsActionPhase}
 			onStart={handleStartMiner}
 			onStop={handleStopMiner}
 		/>

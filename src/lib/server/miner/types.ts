@@ -46,6 +46,7 @@ export interface StreamerRuntimeState {
 }
 
 export interface MinerStatus {
+	starting: boolean;
 	running: boolean;
 	startedAt: Date | null;
 	streamers: StreamerState[];

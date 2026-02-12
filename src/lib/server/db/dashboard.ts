@@ -52,7 +52,7 @@ const compareNullableNumbers = (left: number | null, right: number | null, dir: 
 };
 
 const compareByName = (left: string, right: string, dir: SortDir) =>
-	dir === 'asc' ? left.localeCompare(right) : right.localeCompare(left);
+	dir === 'asc' ? right.localeCompare(left) : left.localeCompare(right);
 
 const comparePriority = (
 	leftLogin: string,
@@ -62,19 +62,22 @@ const comparePriority = (
 ) => {
 	const leftIndex = priorityIndexByLogin.get(leftLogin) ?? Number.MAX_SAFE_INTEGER;
 	const rightIndex = priorityIndexByLogin.get(rightLogin) ?? Number.MAX_SAFE_INTEGER;
-	const byIndex = compareNumbers(leftIndex, rightIndex, dir);
-	return byIndex !== 0 ? byIndex : leftLogin.localeCompare(rightLogin);
+	const byIndex = dir === 'asc' ? rightIndex - leftIndex : leftIndex - rightIndex;
+	return byIndex !== 0 ? byIndex : compareByName(leftLogin, rightLogin, dir);
 };
 
-const getStreamerActivityGroup = (
+const getActivityGroupRank = (
 	login: string,
-	onlineStreamers: ReadonlySet<string>,
-	watchedStreamers: ReadonlySet<string>
+	watchedStreamers: ReadonlySet<string>,
+	onlineStreamers: ReadonlySet<string>
 ) => {
 	if (watchedStreamers.has(login)) return 0;
 	if (onlineStreamers.has(login)) return 1;
 	return 2;
 };
+
+const getOnlineRank = (login: string, onlineStreamers: ReadonlySet<string>) =>
+	onlineStreamers.has(login) ? 0 : 1;
 
 const dedupeConsecutiveBalances = (samples: ChannelPointSample[]) =>
 	samples.reduce<ChannelPointSample[]>((acc, sample) => {
@@ -230,21 +233,35 @@ export const getChannelPointsAnalytics = ({
 		if (sortBy === 'priority') return comparePriority(left.login, right.login, priorityIndexByLogin, sortDir);
 		if (sortBy === 'name') return compareByName(left.login, right.login, sortDir);
 		if (sortBy === 'points') return compareNumbers(left.latestBalance, right.latestBalance, sortDir);
-		if (sortBy === 'lastWatched' || sortBy === 'lastActive') {
-			const leftGroup = getStreamerActivityGroup(left.login, onlineStreamers, watchedStreamers);
-			const rightGroup = getStreamerActivityGroup(right.login, onlineStreamers, watchedStreamers);
-			const byGroup = leftGroup - rightGroup;
-			if (byGroup !== 0) return byGroup;
+		if (sortBy === 'lastWatched') {
+			const leftWatched = watchedStreamers.has(left.login);
+			const rightWatched = watchedStreamers.has(right.login);
 
-			if (leftGroup === 0) {
-				const byWatchedName = compareByName(left.login, right.login, sortDir);
-				return byWatchedName !== 0 ? byWatchedName : left.login.localeCompare(right.login);
+			if (leftWatched !== rightWatched) return leftWatched ? -1 : 1;
+
+			if (leftWatched) {
+				return compareByName(left.login, right.login, sortDir);
 			}
 
-			const leftTimestamp = sortBy === 'lastActive' ? left.lastActiveAtMs : left.lastWatchedAtMs;
-			const rightTimestamp = sortBy === 'lastActive' ? right.lastActiveAtMs : right.lastWatchedAtMs;
-			const byTimestamp = compareNullableNumbers(leftTimestamp, rightTimestamp, sortDir);
-			return byTimestamp !== 0 ? byTimestamp : left.login.localeCompare(right.login);
+			const byLastWatched = compareNullableNumbers(left.lastWatchedAtMs, right.lastWatchedAtMs, sortDir);
+			if (byLastWatched !== 0) return byLastWatched;
+
+			const byOnline = getOnlineRank(left.login, onlineStreamers) - getOnlineRank(right.login, onlineStreamers);
+			if (byOnline !== 0) return byOnline;
+
+			return compareByName(left.login, right.login, sortDir);
+		}
+
+		if (sortBy === 'lastActive') {
+			const byActivityGroup =
+				getActivityGroupRank(left.login, watchedStreamers, onlineStreamers) -
+				getActivityGroupRank(right.login, watchedStreamers, onlineStreamers);
+			if (byActivityGroup !== 0) return byActivityGroup;
+
+			const byLastActive = compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir);
+			if (byLastActive !== 0) return byLastActive;
+
+			return compareByName(left.login, right.login, sortDir);
 		}
 
 		return 0;

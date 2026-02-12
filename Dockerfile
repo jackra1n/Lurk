@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS base
+FROM oven/bun:1-alpine AS base
 WORKDIR /app
 
 FROM base AS install
@@ -6,7 +6,7 @@ RUN mkdir -p /temp/dev /temp/prod
 COPY package.json bun.lock /temp/dev/
 RUN cd /temp/dev && bun install --frozen-lockfile
 COPY package.json bun.lock /temp/prod/
-RUN cd /temp/prod && bun install --frozen-lockfile --production
+RUN cd /temp/prod && bun install --frozen-lockfile --production --omit optional --omit peer
 
 FROM base AS build
 COPY --from=install /temp/dev/node_modules ./node_modules

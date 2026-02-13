@@ -1,4 +1,4 @@
-name: build
+name: 'Type Check and Docker Build'
 
 on:
   pull_request:
@@ -27,9 +27,6 @@ on:
     types:
       - published
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   tests:

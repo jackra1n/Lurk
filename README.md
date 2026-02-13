@@ -36,13 +36,12 @@ Example:
 
 ```bash
 mkdir -p logs
-cp example.compose.yaml compose.yaml
 docker compose up -d
 ```
 
 Open `http://localhost:3000`.
 
-The example compose file persists:
+The included compose file persists:
 - `./data` -> `/data` (runtime state and SQLite database)
 - `./logs` -> `/app/logs` (server logs)
 

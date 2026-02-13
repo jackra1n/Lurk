@@ -4,7 +4,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import HeaderSection from '../header/HeaderSection.svelte';
 	import PointsOverview from '../channel-points/PointsOverview.svelte';
-	import QuickActionsCard from '../quick-actions/QuickActionsCard.svelte';
 	import SummaryCardsSection from '../summary-cards/SummaryCardsSection.svelte';
 	import type {
 		AuthStatusResponse,
@@ -446,7 +445,15 @@
 			</p>
 		{/if}
 
-		<SummaryCardsSection {minerStatus} summary={analytics?.summary ?? null} />
+		<SummaryCardsSection
+			{minerStatus}
+			summary={analytics?.summary ?? null}
+			startDisabled={startMinerDisabled}
+			stopDisabled={stopMinerDisabled}
+			actionPhase={quickActionsActionPhase}
+			onStart={handleStartMiner}
+			onStop={handleStopMiner}
+		/>
 
 		<section>
 			<PointsOverview
@@ -460,15 +467,6 @@
 			/>
 		</section>
 
-		<QuickActionsCard
-			minerRunning={minerStatus.running}
-			lifecycle={minerStatus.lifecycle}
-			startDisabled={startMinerDisabled}
-			stopDisabled={stopMinerDisabled}
-			actionPhase={quickActionsActionPhase}
-			onStart={handleStartMiner}
-			onStop={handleStopMiner}
-		/>
 	</main>
 
 	<footer class="border-t border-border/60">

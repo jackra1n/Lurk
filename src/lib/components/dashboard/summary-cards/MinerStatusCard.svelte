@@ -1,9 +1,29 @@
 <script lang="ts">
-	import { Card, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import Play from '@lucide/svelte/icons/play';
+	import Square from '@lucide/svelte/icons/square';
+	import { Button } from '$lib/components/ui/button';
+	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import type { MinerStatusResponse } from '../shared/types';
 
-	let { minerStatus }: { minerStatus: MinerStatusResponse } = $props();
+	let {
+		minerStatus,
+		startDisabled = false,
+		stopDisabled = false,
+		actionPhase = 'idle',
+		onStart,
+		onStop
+	}: {
+		minerStatus: MinerStatusResponse;
+		startDisabled?: boolean;
+		stopDisabled?: boolean;
+		actionPhase?: 'idle' | 'starting' | 'stopping';
+		onStart?: () => void | Promise<void>;
+		onStop?: () => void | Promise<void>;
+	} = $props();
+
+	const showStartingState = $derived(actionPhase === 'starting' || minerStatus.lifecycle === 'starting');
+	const showStopState = $derived(!showStartingState && minerStatus.running);
 
 	const minerLabel = () => {
 		if (minerStatus.lifecycle === 'starting') return 'Starting';
@@ -11,15 +31,6 @@
 		if (minerStatus.lifecycle === 'authenticating') return 'Waiting';
 		if (minerStatus.lifecycle === 'error') return 'Attention';
 		return 'Stopped';
-	};
-
-	const minerDescription = () => {
-		if (minerStatus.lifecycle === 'starting') return 'Starting miner services.';
-		if (minerStatus.running) return 'Monitoring active channels.';
-		if (minerStatus.lifecycle === 'authenticating') return 'Waiting for Twitch authorization.';
-		if (minerStatus.lifecycle === 'ready') return 'Authenticated and ready to start.';
-		if (minerStatus.lifecycle === 'error') return 'Check status details.';
-		return 'Connect Twitch to start mining.';
 	};
 
 	const minerStatusDotClass = () => {
@@ -59,6 +70,28 @@
 			</Tooltip.Root>
 			<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
 		</div>
-		<CardDescription class="text-sm">{minerDescription()}</CardDescription>
 	</CardHeader>
+	<CardContent class="pt-0">
+		{#if showStopState}
+			<Button
+				class="w-full justify-start"
+				variant="destructive"
+				disabled={stopDisabled || actionPhase === 'stopping'}
+				onclick={onStop}
+			>
+				<Square class="size-4" />
+				{actionPhase === 'stopping' ? 'Stopping...' : 'Stop Miner'}
+			</Button>
+		{:else}
+			<Button
+				class="w-full justify-start"
+				variant="secondary"
+				disabled={startDisabled || showStartingState}
+				onclick={onStart}
+			>
+				<Play class="size-4" />
+				{showStartingState ? 'Starting...' : 'Start Miner'}
+			</Button>
+		{/if}
+	</CardContent>
 </Card>

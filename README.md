@@ -1,11 +1,11 @@
 # Lurk
 
-## What Lurk Is
-
 Lurk is a lightweight Twitch channel points miner with a web UI.
 
-It is built with Bun + SvelteKit, with an emphasis on efficient runtime behavior and a clear analytics UI.
+It is built with Bun + SvelteKit, with an emphasis on efficient runtime and a clear analytics UI.
 This project is inspired by [Twitch-Channel-Points-Miner-v2](https://github.com/rdavydov/Twitch-Channel-Points-Miner-v2).
+
+![Lurk Preview](./docs/images/preview.png)
 
 ## Configuration
 
@@ -72,16 +72,6 @@ Environment variables:
 - `HOST`: bind host (default `0.0.0.0` in container runtime).
 
 Health endpoint: `GET /api/health`
-
-## Development
-
-This section is for contributors and local development workflows.
-
-- Database schema docs: `docs/database-schema.md`
-- DB commands:
-  - `bun run db:generate`
-  - `bun run db:migrate`
-  - `bun run db:studio`
 
 ## Notes
 

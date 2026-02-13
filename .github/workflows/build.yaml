@@ -53,6 +53,9 @@ jobs:
       - name: Svelte + TypeScript Checks
         run: bun run check
 
+      - name: Unit Tests
+        run: bun run test
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest

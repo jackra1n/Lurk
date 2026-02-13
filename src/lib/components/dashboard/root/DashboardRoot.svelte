@@ -472,7 +472,7 @@
 	</main>
 
 	<footer class="border-t border-border/60">
-		<div class="mx-auto flex w-full max-w-6xl justify-center px-4 py-4 sm:justify-end sm:px-6 lg:px-8">
+		<div class="mx-auto flex w-full max-w-6xl justify-center px-4 py-4 sm:px-6 lg:px-8">
 			<Button
 				href="https://github.com/jackra1n/Lurk"
 				target="_blank"

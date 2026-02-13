@@ -3,6 +3,7 @@
 	import Square from '@lucide/svelte/icons/square';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import type { MinerStatusResponse } from '../shared/types';
 
@@ -24,6 +25,9 @@
 
 	const showStartingState = $derived(actionPhase === 'starting' || minerStatus.lifecycle === 'starting');
 	const showStopState = $derived(!showStartingState && minerStatus.running);
+	const stopActionDisabled = $derived(stopDisabled || actionPhase === 'stopping');
+	let stopConfirmRequested = $state(false);
+	const stopConfirmOpen = $derived(stopConfirmRequested && showStopState);
 
 	const minerLabel = () => {
 		if (minerStatus.lifecycle === 'starting') return 'Starting';
@@ -51,6 +55,22 @@
 		if (minerStatus.reason === 'startup_failed') return 'Miner startup failed. Check logs for details.';
 		return 'Miner is stopped.';
 	};
+
+	const openStopConfirm = () => {
+		if (stopActionDisabled || !showStopState) return;
+		stopConfirmRequested = true;
+	};
+
+	const closeStopConfirm = () => {
+		if (stopActionDisabled) return;
+		stopConfirmRequested = false;
+	};
+
+	const confirmStop = async () => {
+		if (stopActionDisabled || !showStopState) return;
+		stopConfirmRequested = false;
+		await onStop?.();
+	};
 </script>
 
 <Card class="bg-card/80">
@@ -75,12 +95,12 @@
 		{#if showStopState}
 			<Button
 				class="w-full justify-start"
-				variant="destructive"
-				disabled={stopDisabled || actionPhase === 'stopping'}
-				onclick={onStop}
+				variant="outline"
+				disabled={stopActionDisabled}
+				onclick={openStopConfirm}
 			>
 				<Square class="size-4" />
-				{actionPhase === 'stopping' ? 'Stopping...' : 'Stop Miner'}
+				Stop Miner
 			</Button>
 		{:else}
 			<Button
@@ -95,3 +115,28 @@
 		{/if}
 	</CardContent>
 </Card>
+
+<Dialog.Root
+	open={stopConfirmOpen}
+	onOpenChange={(open) => {
+		stopConfirmRequested = open && showStopState;
+	}}
+>
+	<Dialog.Content class="sm:max-w-sm">
+		<Dialog.Header>
+			<Dialog.Title>Stop Miner?</Dialog.Title>
+			<Dialog.Description>
+				This will stop watching channels and pause point collection until you start the miner again.
+			</Dialog.Description>
+		</Dialog.Header>
+		<Dialog.Footer>
+			<Button type="button" variant="outline" disabled={stopActionDisabled} onclick={closeStopConfirm}>
+				Cancel
+			</Button>
+			<Button type="button" variant="destructive" disabled={stopActionDisabled} onclick={confirmStop}>
+				<Square class="size-4" />
+				{actionPhase === 'stopping' ? 'Stopping...' : 'Stop Miner'}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

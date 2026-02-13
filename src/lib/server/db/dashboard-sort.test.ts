@@ -47,7 +47,7 @@ const loginsFor = (
 	}).map((item) => item.login);
 
 describe('sortStreamerAnalyticsItems', () => {
-	test('reverses exactly for asc/desc across all sort modes', () => {
+	test('asc is the exact reverse of desc when there are no tiebreaker ties', () => {
 		const scenario = buildScenario(
 			[
 				{ login: 'alpha', latestBalance: 100, lastActiveAtMs: 1_000, lastWatchedAtMs: 1_000 },
@@ -74,16 +74,34 @@ describe('sortStreamerAnalyticsItems', () => {
 			],
 			['charlie', 'alpha', 'echo', 'bravo', 'foxtrot', 'delta', 'golf']
 		);
-		const modes: ChannelPointsSortBy[] = ['lastWatched', 'lastActive', 'name', 'points', 'priority'];
+
+		const modes: ChannelPointsSortBy[] = ['name', 'points', 'priority', 'lastActive'];
 
 		for (const mode of modes) {
-			const desc = loginsFor(scenario, mode, 'desc');
-			const asc = loginsFor(scenario, mode, 'asc');
-			expect(asc).toEqual([...desc].reverse());
+			const descResult = loginsFor(scenario, mode, 'desc');
+			const ascResult = loginsFor(scenario, mode, 'asc');
+			expect(ascResult).toEqual([...descResult].reverse());
 		}
 	});
 
-	test('lastWatched canonical order prefers watched, then timestamp, then online for equal timestamps', () => {
+	test('tied items use stable A-Z tiebreaker regardless of sort direction', () => {
+		const scenario = buildScenario([
+			{ login: 'echo', latestBalance: 100, lastActiveAtMs: 5_000, lastWatchedAtMs: 5_000, isOnline: true, isWatched: true },
+			{ login: 'alpha', latestBalance: 100, lastActiveAtMs: 5_000, lastWatchedAtMs: 5_000, isOnline: true, isWatched: true },
+			{ login: 'charlie', latestBalance: 100, lastActiveAtMs: 5_000, lastWatchedAtMs: 5_000, isOnline: true, isWatched: true }
+		]);
+
+		// all items are tied on every metric, so name tiebreaker (A-Z) decides
+		const modes: ChannelPointsSortBy[] = ['lastWatched', 'lastActive'];
+		const expectedAlphabetical = ['alpha', 'charlie', 'echo'];
+
+		for (const mode of modes) {
+			expect(loginsFor(scenario, mode, 'desc')).toEqual(expectedAlphabetical);
+			expect(loginsFor(scenario, mode, 'asc')).toEqual(expectedAlphabetical);
+		}
+	});
+
+	test('lastWatched canonical order prefers watched, then timestamp, then A-Z for equal timestamps', () => {
 		const scenario = buildScenario([
 			{ login: 'delta', latestBalance: 120, lastActiveAtMs: 9_000, lastWatchedAtMs: 6_000, isOnline: true, isWatched: true },
 			{ login: 'echo', latestBalance: 300, lastActiveAtMs: 8_500, lastWatchedAtMs: 6_000, isOnline: true, isWatched: true },
@@ -95,7 +113,17 @@ describe('sortStreamerAnalyticsItems', () => {
 		]);
 
 		const desc = loginsFor(scenario, 'lastWatched', 'desc');
-		expect(desc).toEqual(['delta', 'echo', 'bravo', 'charlie', 'alpha', 'golf', 'foxtrot']);
+		expect(desc).toEqual(['delta', 'echo', 'bravo', 'charlie', 'alpha', 'foxtrot', 'golf']);
+	});
+
+	test('lastWatched ignores online status for non-watched timestamp ties', () => {
+		const scenario = buildScenario([
+			{ login: 'zulu', latestBalance: 1, lastActiveAtMs: 1_000, lastWatchedAtMs: 5_000, isOnline: true },
+			{ login: 'alpha', latestBalance: 1, lastActiveAtMs: 1_000, lastWatchedAtMs: 5_000 }
+		]);
+
+		expect(loginsFor(scenario, 'lastWatched', 'desc')).toEqual(['alpha', 'zulu']);
+		expect(loginsFor(scenario, 'lastWatched', 'asc')).toEqual(['alpha', 'zulu']);
 	});
 
 	test('lastActive canonical order keeps watched > online > offline groups', () => {
@@ -109,15 +137,22 @@ describe('sortStreamerAnalyticsItems', () => {
 			{ login: 'foxtrot', latestBalance: 50, lastActiveAtMs: null, lastWatchedAtMs: null }
 		]);
 
-		const desc = loginsFor(scenario, 'lastActive', 'desc');
-		const rank = (login: string) => {
-			if (scenario.watchedStreamers.has(login)) return 0;
+		const score = (login: string) => {
+			if (scenario.watchedStreamers.has(login)) return 2;
 			if (scenario.onlineStreamers.has(login)) return 1;
-			return 2;
+			return 0;
 		};
 
+		const desc = loginsFor(scenario, 'lastActive', 'desc');
+
 		for (let index = 0; index < desc.length - 1; index += 1) {
-			expect(rank(desc[index])).toBeLessThanOrEqual(rank(desc[index + 1]));
+			expect(score(desc[index])).toBeGreaterThanOrEqual(score(desc[index + 1]));
+		}
+
+		const asc = loginsFor(scenario, 'lastActive', 'asc');
+
+		for (let index = 0; index < asc.length - 1; index += 1) {
+			expect(score(asc[index])).toBeLessThanOrEqual(score(asc[index + 1]));
 		}
 	});
 });

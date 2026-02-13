@@ -9,6 +9,8 @@ interface SortStreamerAnalyticsItemsInput {
 	watchedStreamers?: ReadonlySet<string>;
 }
 
+type StreamerComparator = (left: StreamerAnalyticsItem, right: StreamerAnalyticsItem) => number;
+
 const compareNumbers = (left: number, right: number, dir: SortDir) =>
 	dir === 'asc' ? left - right : right - left;
 
@@ -20,7 +22,9 @@ const compareNullableNumbers = (left: number | null, right: number | null, dir: 
 };
 
 const compareByName = (left: string, right: string, dir: SortDir) =>
-	dir === 'asc' ? right.localeCompare(left) : left.localeCompare(right);
+	dir === 'asc' ? left.localeCompare(right) : right.localeCompare(left);
+
+const pickFirstNonZero = (...values: number[]) => values.find((value) => value !== 0) ?? 0;
 
 const comparePriority = (
 	leftLogin: string,
@@ -31,23 +35,18 @@ const comparePriority = (
 	const leftIndex = priorityIndexByLogin.get(leftLogin) ?? Number.MAX_SAFE_INTEGER;
 	const rightIndex = priorityIndexByLogin.get(rightLogin) ?? Number.MAX_SAFE_INTEGER;
 	const byIndex = dir === 'asc' ? rightIndex - leftIndex : leftIndex - rightIndex;
-	return byIndex !== 0 ? byIndex : compareByName(leftLogin, rightLogin, dir);
+	return byIndex !== 0 ? byIndex : compareByName(leftLogin, rightLogin, 'asc');
 };
 
-const getActivityGroupRank = (
+const getActivityScore = (
 	login: string,
 	watchedStreamers: ReadonlySet<string>,
 	onlineStreamers: ReadonlySet<string>
 ) => {
-	if (watchedStreamers.has(login)) return 0;
+	if (watchedStreamers.has(login)) return 2;
 	if (onlineStreamers.has(login)) return 1;
-	return 2;
+	return 0;
 };
-
-const getOnlineRank = (login: string, onlineStreamers: ReadonlySet<string>) =>
-	onlineStreamers.has(login) ? 0 : 1;
-
-const canonicalSortDir: SortDir = 'desc';
 
 export const sortStreamerAnalyticsItems = ({
 	items,
@@ -57,58 +56,44 @@ export const sortStreamerAnalyticsItems = ({
 	onlineStreamers = new Set<string>(),
 	watchedStreamers = new Set<string>()
 }: SortStreamerAnalyticsItemsInput) => {
-	const sorted = [...items];
+	const compareByLoginAZ: StreamerComparator = (left, right) =>
+		compareByName(left.login, right.login, 'asc');
 
-	sorted.sort((left, right) => {
-		if (sortBy === 'priority')
-			return comparePriority(left.login, right.login, priorityIndexByLogin, canonicalSortDir);
-		if (sortBy === 'name') return compareByName(left.login, right.login, canonicalSortDir);
-		if (sortBy === 'points') return compareNumbers(left.latestBalance, right.latestBalance, canonicalSortDir);
-		if (sortBy === 'lastWatched') {
+	const comparators: Record<ChannelPointsSortBy, StreamerComparator> = {
+		priority: (left, right) => comparePriority(left.login, right.login, priorityIndexByLogin, sortDir),
+		name: (left, right) => compareByName(left.login, right.login, sortDir),
+		points: (left, right) => compareNumbers(left.latestBalance, right.latestBalance, sortDir),
+		lastWatched: (left, right) => {
 			const leftWatched = watchedStreamers.has(left.login);
 			const rightWatched = watchedStreamers.has(right.login);
-
-			if (leftWatched !== rightWatched) return leftWatched ? -1 : 1;
-
-			if (leftWatched) {
-				return compareByName(left.login, right.login, canonicalSortDir);
-			}
-
-			const byLastWatched = compareNullableNumbers(
-				left.lastWatchedAtMs,
-				right.lastWatchedAtMs,
-				canonicalSortDir
+			const byWatched = compareNumbers(
+				Number(leftWatched),
+				Number(rightWatched),
+				sortDir
 			);
-			if (byLastWatched !== 0) return byLastWatched;
+			if (byWatched !== 0) return byWatched;
 
-			const byOnline = getOnlineRank(left.login, onlineStreamers) - getOnlineRank(right.login, onlineStreamers);
-			if (byOnline !== 0) return byOnline;
+			if (leftWatched) return compareByLoginAZ(left, right);
 
-			return compareByName(left.login, right.login, canonicalSortDir);
-		}
-
-		if (sortBy === 'lastActive') {
-			const byActivityGroup =
-				getActivityGroupRank(left.login, watchedStreamers, onlineStreamers) -
-				getActivityGroupRank(right.login, watchedStreamers, onlineStreamers);
-			if (byActivityGroup !== 0) return byActivityGroup;
-
-			const byLastActive = compareNullableNumbers(
-				left.lastActiveAtMs,
-				right.lastActiveAtMs,
-				canonicalSortDir
+			return pickFirstNonZero(
+				compareNullableNumbers(left.lastWatchedAtMs, right.lastWatchedAtMs, sortDir),
+				compareByLoginAZ(left, right)
 			);
-			if (byLastActive !== 0) return byLastActive;
+		},
+		lastActive: (left, right) => {
+			const byActivityScore = compareNumbers(
+				getActivityScore(left.login, watchedStreamers, onlineStreamers),
+				getActivityScore(right.login, watchedStreamers, onlineStreamers),
+				sortDir
+			);
+			if (byActivityScore !== 0) return byActivityScore;
 
-			return compareByName(left.login, right.login, canonicalSortDir);
+			return pickFirstNonZero(
+				compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir),
+				compareByLoginAZ(left, right)
+			);
 		}
+	};
 
-		return 0;
-	});
-
-	if (sortDir !== canonicalSortDir) {
-		sorted.reverse();
-	}
-
-	return sorted;
+	return [...items].sort(comparators[sortBy]);
 };

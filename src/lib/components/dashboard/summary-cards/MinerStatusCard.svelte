@@ -55,21 +55,21 @@
 
 <Card class="bg-card/80">
 	<CardHeader class="gap-2">
-		<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
-		<div class="flex items-center gap-2">
+		<div class="flex items-start justify-between gap-3">
+			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
 			<Tooltip.Root>
 				<Tooltip.Trigger aria-label={minerStatusTooltip()}>
 					{#snippet child({ props })}
 						{@const { type: _type, ...triggerProps } = props}
-						<span {...triggerProps} class={`size-2.5 rounded-full ${minerStatusDotClass()}`}></span>
+						<span {...triggerProps} class={`size-2.5 shrink-0 rounded-full ${minerStatusDotClass()}`}></span>
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content side="top" sideOffset={8}>
 					{minerStatusTooltip()}
 				</Tooltip.Content>
 			</Tooltip.Root>
-			<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
 		</div>
+		<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
 	</CardHeader>
 	<CardContent class="pt-0">
 		{#if showStopState}

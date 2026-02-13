@@ -1,6 +1,10 @@
 <script lang="ts">
+	import CircleAlert from '@lucide/svelte/icons/circle-alert';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Github from '@lucide/svelte/icons/github';
+	import X from '@lucide/svelte/icons/x';
 	import { onMount } from 'svelte';
+	import * as Alert from '$lib/components/ui/alert';
 	import { Button } from '$lib/components/ui/button';
 	import HeaderSection from '../header/HeaderSection.svelte';
 	import PointsOverview from '../channel-points/PointsOverview.svelte';
@@ -69,6 +73,19 @@
 	let selectedStreamerLogin = $state<string | null>(null);
 	let pollIntervalMs = $state(slowPollMs);
 	let minerActionIntent = $state<'start' | 'stop' | null>(null);
+	let dashboardNotice = $derived(
+		errorMessage
+			? {
+					kind: 'error',
+					text: errorMessage
+				}
+			: message
+				? {
+						kind: 'success',
+						text: message
+					}
+				: null
+	);
 	let analyticsControls = $derived({
 		sortBy: analyticsSortBy,
 		sortDir: analyticsSortDir,
@@ -423,6 +440,11 @@
 		analyticsRangeSelection = change.selection;
 		await refreshAnalytics(true);
 	};
+
+	const dismissDashboardNotice = () => {
+		message = null;
+		errorMessage = null;
+	};
 </script>
 
 <div class="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -435,14 +457,34 @@
 			onToggleTheme={toggleTheme}
 		/>
 
-		{#if errorMessage}
-			<p class="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-				{errorMessage}
-			</p>
-		{:else if message}
-			<p class="rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-				{message}
-			</p>
+		{#if dashboardNotice}
+			<Alert.Root
+				variant={dashboardNotice.kind === 'error' ? 'destructive' : 'default'}
+				class={
+					dashboardNotice.kind === 'error'
+						? 'border-destructive/40 bg-destructive/10 pr-12'
+						: 'border-border/70 bg-muted/40 pr-12'
+				}
+			>
+				{#if dashboardNotice.kind === 'error'}
+					<CircleAlert class="size-4 text-destructive" />
+				{:else}
+					<CircleCheck class="size-4 text-emerald-500" />
+				{/if}
+				<Alert.Description class={dashboardNotice.kind === 'error' ? '' : 'text-muted-foreground'}>
+					<p>{dashboardNotice.text}</p>
+				</Alert.Description>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-sm"
+					class="absolute right-2 top-2"
+					aria-label="Dismiss message"
+					onclick={dismissDashboardNotice}
+				>
+					<X class="size-4" />
+				</Button>
+			</Alert.Root>
 		{/if}
 
 		<SummaryCardsSection

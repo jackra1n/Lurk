@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.2](https://github.com/jackra1n/Lurk/compare/1.0.1...1.0.2) (2026-02-14)
+
+
+### Bug Fixes
+
+* release please config (finally read the correct doc) ([6212ab8](https://github.com/jackra1n/Lurk/commit/6212ab861f57a2880769d56683527749e89fcc69))
+
+
+### CI/CD
+
+* adds arm64 build support ([8c4303b](https://github.com/jackra1n/Lurk/commit/8c4303b66f7ec425b8bce38ea35db5e7d636b14a))
+
 ## [1.0.1](https://github.com/jackra1n/Lurk/compare/lurk-v1.0.0...lurk-1.0.1) (2026-02-14)
 
 

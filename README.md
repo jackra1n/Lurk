@@ -39,7 +39,7 @@ mkdir -p logs
 docker compose up -d
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:1738`.
 
 The included compose file persists:
 - `./data` -> `/data` (runtime state and SQLite database)

@@ -3,7 +3,9 @@
   "packages": {
     ".": {
       "release-type": "node",
+      "include-component-in-tag": false,
       "include-v-in-tag": false,
+      "include-v-in-release-name": false,
       "changelog-path": "CHANGELOG.md",
       "changelog-sections": [
         {

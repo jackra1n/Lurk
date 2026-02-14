@@ -3,8 +3,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "lurk",
-      "include-v-in-tag": true,
+      "include-v-in-tag": false,
       "changelog-path": "CHANGELOG.md",
       "changelog-sections": [
         {

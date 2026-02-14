@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/jackra1n/Lurk/compare/lurk-v1.0.0...lurk-1.0.1) (2026-02-14)
+
+
+### Bug Fixes
+
+* update release tag format ([c521a65](https://github.com/jackra1n/Lurk/commit/c521a65429a99d7e89443987f5c98c9f2e29920b))
+* update release tag format ([9f746fc](https://github.com/jackra1n/Lurk/commit/9f746fc80e414049731a83a8f16c3ac50ca892f9))
+
 ## [1.0.0](https://github.com/jackra1n/Lurk/compare/lurk-v0.0.1...lurk-v1.0.0) (2026-02-13)
 
 

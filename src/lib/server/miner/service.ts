@@ -307,22 +307,6 @@ class MinerService {
 						state.stream.minuteWatched += (now - state.stream.minuteWatchedTimestamp) / 60_000;
 					}
 					state.stream.minuteWatchedTimestamp = now;
-					withEventStore('minute_watched_tick', () => {
-						eventStore.recordEvent({
-							streamer: {
-								login: state.name,
-								channelId: state.channelId
-							},
-							eventType: 'minute_watched_tick',
-							source: 'spade',
-							broadcastId: state.stream.broadcastId,
-							viewersCount: state.stream.viewers,
-							payload: {
-								success: true,
-								minuteWatched: Number(state.stream.minuteWatched.toFixed(2))
-							}
-						});
-					});
 					logger.debug(
 						{ streamer: state.name, minuteWatched: state.stream.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'

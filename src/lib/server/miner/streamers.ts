@@ -277,20 +277,6 @@ export async function processStreamer(
 		}
 		state.channelPoints = context.balance;
 		state.activeMultipliers = context.activeMultipliers;
-		withEventStore('context_snapshot', () => {
-			eventStore.recordEvent({
-				streamer: {
-					login: state.name,
-					channelId: state.channelId
-				},
-				eventType: 'context_snapshot',
-				source: 'gql_context',
-				balanceAfter: context.balance,
-				payload: {
-					activeMultipliers: context.activeMultipliers
-				}
-			});
-		});
 
 		if (context.availableClaimId && state.channelId) {
 			logger.info({ streamer: state.name }, 'Found available claim via context check');

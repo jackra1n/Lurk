@@ -6,6 +6,7 @@ import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
 import type { StreamerState, StreamerRuntimeState, MinerStatus, MinerStartResult } from './types';
 import { handlePubSubMessage, type EventHandlerDeps, type MessageDedup } from './events';
+import { diffWatchedLogins } from './watch-markers';
 import {
 	syncStreamers,
 	subscribeToPointsTopic,
@@ -28,6 +29,7 @@ class MinerService {
 	private tickCount = 0;
 	private lastTick: Date | null = null;
 	private streamerStates: Map<string, StreamerState> = new Map();
+	private watchedLogins = new Set<string>();
 	private userId: string | null = null;
 	private lastStartResult: MinerStartResult | null = null;
 
@@ -56,6 +58,7 @@ class MinerService {
 			this.minuteWatcherInterval = null;
 		}
 
+		this.persistWatchTransitions([]);
 		twitchPubSub.disconnect();
 		withEventStore('run_stop_failed_start', () => {
 			eventStore.stopRun('startup_failed');
@@ -64,6 +67,54 @@ class MinerService {
 		this.running = false;
 		this.startedAt = null;
 		this.userId = null;
+	}
+
+	private persistWatchTransitions(nextWatchedStates: StreamerState[]): void {
+		const nextWatchedLogins = new Set(nextWatchedStates.map((state) => state.name));
+		const { started, stopped } = diffWatchedLogins(this.watchedLogins, nextWatchedLogins);
+
+		if (started.length === 0 && stopped.length === 0) {
+			this.watchedLogins = nextWatchedLogins;
+			return;
+		}
+
+		const occurredAtMs = Date.now();
+
+		for (const login of stopped) {
+			const state = this.streamerStates.get(login);
+			withEventStore('watch_stopped', () => {
+				eventStore.recordEvent({
+					streamer: {
+						login,
+						channelId: state?.channelId
+					},
+					eventType: 'watch_stopped',
+					source: 'system',
+					occurredAtMs,
+					broadcastId: state?.stream.broadcastId,
+					viewersCount: state?.stream.viewers
+				});
+			});
+		}
+
+		for (const login of started) {
+			const state = this.streamerStates.get(login);
+			withEventStore('watch_started', () => {
+				eventStore.recordEvent({
+					streamer: {
+						login,
+						channelId: state?.channelId
+					},
+					eventType: 'watch_started',
+					source: 'system',
+					occurredAtMs,
+					broadcastId: state?.stream.broadcastId,
+					viewersCount: state?.stream.viewers
+				});
+			});
+		}
+
+		this.watchedLogins = nextWatchedLogins;
 	}
 
 	private getEventHandlerDeps(): EventHandlerDeps {
@@ -224,6 +275,7 @@ class MinerService {
 			this.minuteWatcherInterval = null;
 		}
 
+		this.persistWatchTransitions([]);
 		twitchPubSub.disconnect();
 		withEventStore('run_stop', () => {
 			eventStore.stopRun('stopped');
@@ -269,6 +321,7 @@ class MinerService {
 		}
 
 		const selected = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
+		this.persistWatchTransitions(selected);
 		if (selected.length === 0) return;
 
 		const delayBetween = this.MINUTE_WATCHED_INTERVAL / selected.length;
@@ -307,22 +360,6 @@ class MinerService {
 						state.stream.minuteWatched += (now - state.stream.minuteWatchedTimestamp) / 60_000;
 					}
 					state.stream.minuteWatchedTimestamp = now;
-					withEventStore('minute_watched_tick', () => {
-						eventStore.recordEvent({
-							streamer: {
-								login: state.name,
-								channelId: state.channelId
-							},
-							eventType: 'minute_watched_tick',
-							source: 'spade',
-							broadcastId: state.stream.broadcastId,
-							viewersCount: state.stream.viewers,
-							payload: {
-								success: true,
-								minuteWatched: Number(state.stream.minuteWatched.toFixed(2))
-							}
-						});
-					});
 					logger.debug(
 						{ streamer: state.name, minuteWatched: state.stream.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'
@@ -391,6 +428,19 @@ class MinerService {
 				isWatched: watched.has(login)
 			};
 		});
+	}
+
+	getRuntimeBalanceByLogin(): ReadonlyMap<string, number> {
+		if (!this.running) return new Map();
+
+		const balances = new Map<string, number>();
+		for (const login of getStreamers()) {
+			const state = this.streamerStates.get(login);
+			if (!state || state.lastContextRefresh === 0) continue;
+			balances.set(login, state.channelPoints);
+		}
+
+		return balances;
 	}
 
 	getLastStartResult(): MinerStartResult | null {

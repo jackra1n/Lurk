@@ -19,6 +19,8 @@ type EventType =
 	| 'claim_success'
 	| 'claim_failed'
 	| 'points_earned'
+	| 'watch_started'
+	| 'watch_stopped'
 	| 'minute_watched_tick'
 	| 'minute_watched_tick_failed'
 	| 'context_snapshot';

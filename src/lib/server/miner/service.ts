@@ -29,7 +29,7 @@ class MinerService {
 	private tickCount = 0;
 	private lastTick: Date | null = null;
 	private streamerStates: Map<string, StreamerState> = new Map();
-	private watchedLogins = new Set<string>();
+	private watchedStreamerNames = new Set<string>();
 	private userId: string | null = null;
 	private lastStartResult: MinerStartResult | null = null;
 
@@ -70,11 +70,13 @@ class MinerService {
 	}
 
 	private persistWatchTransitions(nextWatchedStates: StreamerState[]): void {
-		const nextWatchedLogins = new Set(nextWatchedStates.map((state) => state.name));
-		const { started, stopped } = diffWatchedLogins(this.watchedLogins, nextWatchedLogins);
+		const nextWatchedStreamerNames = new Set(nextWatchedStates.map((state) => state.name));
+		const { started, stopped } = diffWatchedLogins(this.watchedStreamerNames, nextWatchedStreamerNames);
+		const watchedStreamerNames = Array.from(nextWatchedStreamerNames).sort((left, right) => left.localeCompare(right));
+		const watchedCount = watchedStreamerNames.length;
 
 		if (started.length === 0 && stopped.length === 0) {
-			this.watchedLogins = nextWatchedLogins;
+			this.watchedStreamerNames = nextWatchedStreamerNames;
 			return;
 		}
 
@@ -95,6 +97,14 @@ class MinerService {
 					viewersCount: state?.stream.viewers
 				});
 			});
+			logger.info(
+				{
+					streamer: login,
+					watchedCount,
+					watchedLogins: watchedStreamerNames
+				},
+				'Watch stopped'
+			);
 		}
 
 		for (const login of started) {
@@ -112,9 +122,17 @@ class MinerService {
 					viewersCount: state?.stream.viewers
 				});
 			});
+			logger.info(
+				{
+					streamer: login,
+					watchedCount,
+					watchedLogins: watchedStreamerNames
+				},
+				'Watch started'
+			);
 		}
 
-		this.watchedLogins = nextWatchedLogins;
+		this.watchedStreamerNames = nextWatchedStreamerNames;
 	}
 
 	private getEventHandlerDeps(): EventHandlerDeps {

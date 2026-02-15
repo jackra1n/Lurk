@@ -345,7 +345,7 @@ export class TwitchClient {
 
 
 	// get a playback access token for a live channel (needed for HLS manifest)
-	async getPlaybackAccessToken(login: string): Promise<{ signature: string; value: string } | null> {
+	async getPlaybackAccessToken(streamerName: string): Promise<{ signature: string; value: string } | null> {
 		if (!this.isAuthenticated()) return null;
 
 		interface PlaybackTokenResponse {
@@ -358,7 +358,7 @@ export class TwitchClient {
 		const response = await this.postGqlRequest<PlaybackTokenResponse>(
 			GQL_OPERATIONS.PlaybackAccessToken,
 			{
-				login: login.toLowerCase(),
+				login: streamerName.toLowerCase(),
 				isLive: true,
 				isVod: false,
 				vodID: '',
@@ -367,13 +367,13 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			logger.error({ login, errors: response.errors }, 'Failed to get playback access token');
+			logger.error({ login: streamerName, errors: response.errors }, 'Failed to get playback access token');
 			return null;
 		}
 
 		const token = response.data?.streamPlaybackAccessToken;
 		if (!token?.signature || !token?.value) {
-			logger.debug({ login }, 'No playback access token returned (stream may be offline)');
+			logger.debug({ login: streamerName }, 'No playback access token returned (stream may be offline)');
 			return null;
 		}
 

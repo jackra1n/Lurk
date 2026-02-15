@@ -338,74 +338,74 @@ class MinerService {
 			}
 		}
 
-		const selected = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
-		this.persistWatchTransitions(selected);
-		if (selected.length === 0) return;
+		const selectedStreamers = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
+		this.persistWatchTransitions(selectedStreamers);
+		if (selectedStreamers.length === 0) return;
 
-		const delayBetween = this.MINUTE_WATCHED_INTERVAL / selected.length;
+		const delayBetween = this.MINUTE_WATCHED_INTERVAL / selectedStreamers.length;
 
-		for (let i = 0; i < selected.length; i++) {
-			const state = selected[i];
-			if (!state.channelId || !state.stream.broadcastId || !state.stream.spadeUrl) continue;
+		for (let i = 0; i < selectedStreamers.length; i++) {
+			const streamerState = selectedStreamers[i];
+			if (!streamerState.channelId || !streamerState.stream.broadcastId || !streamerState.stream.spadeUrl) continue;
 
 			try {
-				const token = await twitchClient.getPlaybackAccessToken(state.name);
+				const token = await twitchClient.getPlaybackAccessToken(streamerState.name);
 				if (!token) {
-					logger.debug({ streamer: state.name }, 'Could not get playback token, skipping minute-watched');
+					logger.debug({ streamer: streamerState.name }, 'Could not get playback token, skipping minute-watched');
 					continue;
 				}
 
 				const streamUrl = await twitchClient.fetchLowestQualityStreamUrl(
-					state.name,
+					streamerState.name,
 					token.signature,
 					token.value
 				);
 				if (!streamUrl) {
-					logger.debug({ streamer: state.name }, 'Could not resolve stream URL, skipping minute-watched');
+					logger.debug({ streamer: streamerState.name }, 'Could not resolve stream URL, skipping minute-watched');
 					continue;
 				}
 
 				const payload = encodeMinuteWatchedPayload(
-					state.channelId,
-					state.stream.broadcastId,
+					streamerState.channelId,
+					streamerState.stream.broadcastId,
 					this.userId,
-					state.name
+					streamerState.name
 				);
 
-				const success = await twitchClient.sendMinuteWatchedEvent(state.stream.spadeUrl, payload);
+				const success = await twitchClient.sendMinuteWatchedEvent(streamerState.stream.spadeUrl, payload);
 				if (success) {
-					if (state.stream.minuteWatchedTimestamp > 0) {
-						state.stream.minuteWatched += (now - state.stream.minuteWatchedTimestamp) / 60_000;
+					if (streamerState.stream.minuteWatchedTimestamp > 0) {
+						streamerState.stream.minuteWatched += (now - streamerState.stream.minuteWatchedTimestamp) / 60_000;
 					}
-					state.stream.minuteWatchedTimestamp = now;
+					streamerState.stream.minuteWatchedTimestamp = now;
 					logger.debug(
-						{ streamer: state.name, minuteWatched: state.stream.minuteWatched.toFixed(2) },
+						{ streamer: streamerState.name, minuteWatched: streamerState.stream.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'
 					);
 				} else {
 					withEventStore('minute_watched_tick_failed', () => {
 						eventStore.recordEvent({
 							streamer: {
-								login: state.name,
-								channelId: state.channelId
+								login: streamerState.name,
+								channelId: streamerState.channelId
 							},
 							eventType: 'minute_watched_tick_failed',
 							source: 'spade',
-							broadcastId: state.stream.broadcastId,
-							viewersCount: state.stream.viewers,
+							broadcastId: streamerState.stream.broadcastId,
+							viewersCount: streamerState.stream.viewers,
 							payload: {
 								success: false
 							}
 						});
 					});
-					logger.debug({ streamer: state.name }, 'Minute-watched POST did not return 204');
+					logger.debug({ streamer: streamerState.name }, 'Minute-watched POST did not return 204');
 				}
 			} catch (error) {
-				logger.error({ err: error, streamer: state.name }, 'Error in minute-watched for streamer');
+				logger.error({ err: error, streamer: streamerState.name }, 'Error in minute-watched for streamer');
 			}
 
 			// space out requests between streamers (skip delay after last one)
-			if (i < selected.length - 1) {
+			if (i < selectedStreamers.length - 1) {
 				await new Promise((resolve) => setTimeout(resolve, delayBetween));
 			}
 		}

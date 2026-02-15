@@ -56,8 +56,8 @@ Primary append-only event ledger.
 - `occurred_at_ms` (timeline axis)
 - `streamer_id`
 - `miner_run_id`, `stream_session_id`
-- `event_type` (`points_earned`, `claim_success`, `stream_up`, `minute_watched_tick`, etc.)
-- `source` (`pubsub`, `gql_context`, `gql_stream`, `spade`)
+- `event_type` (`points_earned`, `claim_success`, `stream_up`, `watch_started`, `watch_stopped`, etc.)
+- `source` (`pubsub`, `gql_context`, `gql_stream`, `spade`, `system`)
 - `reason_code` (e.g. `WATCH`, `CLAIM`, `WATCH_STREAK`)
 - `points_delta`
 - `balance_after`

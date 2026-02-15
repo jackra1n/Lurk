@@ -48,6 +48,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	const watchedStreamers = new Set(
 		runtimeStates.filter((streamerState) => streamerState.isWatched).map((streamerState) => streamerState.login)
 	);
+	const runtimeBalanceByLogin = minerService.getRuntimeBalanceByLogin();
 	const analytics = getChannelPointsAnalytics({
 		fromMs: effectiveFromMs,
 		toMs,
@@ -55,6 +56,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		sortDir,
 		onlineStreamers,
 		watchedStreamers,
+		runtimeBalanceByLogin,
 		requestTimestampMs: now,
 		selectedStreamerLogin
 	});

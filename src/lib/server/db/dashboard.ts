@@ -38,6 +38,7 @@ interface ChannelPointsAnalyticsInput {
 	sortDir: SortDir;
 	onlineStreamers?: ReadonlySet<string>;
 	watchedStreamers?: ReadonlySet<string>;
+	runtimeBalanceByLogin?: ReadonlyMap<string, number>;
 	requestTimestampMs?: number;
 	selectedStreamerLogin?: string | null;
 }
@@ -115,6 +116,7 @@ export const getChannelPointsAnalytics = ({
 	sortDir,
 	onlineStreamers = new Set<string>(),
 	watchedStreamers = new Set<string>(),
+	runtimeBalanceByLogin = new Map<string, number>(),
 	requestTimestampMs = Date.now(),
 	selectedStreamerLogin
 }: ChannelPointsAnalyticsInput): ChannelPointsAnalyticsResult => {
@@ -159,7 +161,7 @@ export const getChannelPointsAnalytics = ({
 						streamerId: channelPointEvents.streamerId,
 						pointsEarned: sql<number>`coalesce(sum(${channelPointEvents.pointsDelta}), 0)`,
 						lastOfflineAtMs: sql<number | null>`max(case when ${channelPointEvents.eventType} = 'stream_down' then ${channelPointEvents.occurredAtMs} end)`,
-						lastWatchedAtMs: sql<number | null>`max(case when ${channelPointEvents.eventType} = 'minute_watched_tick' then ${channelPointEvents.occurredAtMs} end)`
+						lastWatchedAtMs: sql<number | null>`max(case when ${channelPointEvents.eventType} = 'watch_started' or ${channelPointEvents.eventType} = 'watch_stopped' then ${channelPointEvents.occurredAtMs} end)`
 					})
 					.from(channelPointEvents)
 					.where(inArray(channelPointEvents.streamerId, streamerIds))
@@ -181,11 +183,13 @@ export const getChannelPointsAnalytics = ({
 	const items = configuredStreamerNames.map((streamerName) => {
 		const streamer = streamerByLogin.get(streamerName);
 		const aggregate = streamer ? aggregateByStreamerId.get(streamer.id) : undefined;
+		const fallbackBalance = streamer ? getLatestBalanceByStreamerId(streamer.id) : 0;
+		const runtimeBalance = runtimeBalanceByLogin.get(streamerName);
 
 		return {
 			streamerId: streamer?.id ?? null,
 			login: streamerName,
-			latestBalance: streamer ? getLatestBalanceByStreamerId(streamer.id) : 0,
+			latestBalance: runtimeBalanceByLogin.has(streamerName) ? Number(runtimeBalance ?? 0) : fallbackBalance,
 			pointsEarned: aggregate?.pointsEarned ?? 0,
 			lastActiveAtMs: onlineStreamers.has(streamerName) ? requestTimestampMs : (aggregate?.lastOfflineAtMs ?? null),
 			lastWatchedAtMs: aggregate?.lastWatchedAtMs ?? null

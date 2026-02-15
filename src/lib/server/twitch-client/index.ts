@@ -95,10 +95,7 @@ const jitterDelay = (delayMs: number) => {
 };
 
 const summarizeGqlErrors = (errors: GqlError[]) =>
-	errors
-		.map((error) => error.message)
-		.filter((message, index, messages) => messages.indexOf(message) === index)
-		.slice(0, 4);
+	[...new Set(errors.map((error) => error.message))].slice(0, 4);
 
 function classifyGqlErrors(errors: GqlError[]): GqlErrorSummary {
 	const messages = summarizeGqlErrors(errors);

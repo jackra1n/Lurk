@@ -64,7 +64,6 @@ export const GQL_OPERATIONS = {
 export type PubSubTopicType =
 	| 'community-points-user-v1'
 	| 'video-playback-by-id'
-	| 'predictions-channel-v1'
 	| 'raid';
 
 export interface PubSubMessage {

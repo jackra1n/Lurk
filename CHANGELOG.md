@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.1.0](https://github.com/jackra1n/Lurk/compare/1.0.3...1.1.0) (2026-02-15)
+
+
+### Features
+
+* add twitch gql rate limiting ([bde2886](https://github.com/jackra1n/Lurk/commit/bde2886a4c9bbcb43534b6ce4d3204c51180e140))
+* add websocket pool ([cec6a1d](https://github.com/jackra1n/Lurk/commit/cec6a1db644ce9f30cdef7492a5d8fb63f96baff))
+* better gql error handling, rate limiting and retries ([b7bcd14](https://github.com/jackra1n/Lurk/commit/b7bcd148d929c5c53d1fc19a3c17dc46f208e008))
+* **pubsub:** add new PubSub pool, socket, types and index ([c69e94c](https://github.com/jackra1n/Lurk/commit/c69e94c91b6e083f799a86947b1db9bdd8874b7a))
+* **twitch-client:** improve GQL error handling, retry and classify errors ([f3fbabf](https://github.com/jackra1n/Lurk/commit/f3fbabf31c54dc9ec910dc857abbbf8a2e0f8d92))
+
+
+### Bug Fixes
+
+* add await becase .rejects returns a Promise ([e9fc427](https://github.com/jackra1n/Lurk/commit/e9fc427cc59e06c1899ef25adfddf883fc8f4113))
+* set lastWatchedAtMs from watchedStreamers when currently watched ([1263e54](https://github.com/jackra1n/Lurk/commit/1263e54f384ca9ee82e30f77009a9c5354ee3746))
+
+
+### Refactoring
+
+* **miner:** use stream info status and preserve state on unknown API results ([93d9874](https://github.com/jackra1n/Lurk/commit/93d987483f543130ec06ffcbcada5780071fecea))
+* rename variables for clarity ([2157f1f](https://github.com/jackra1n/Lurk/commit/2157f1f4dca23865aa2706bc55b0c9d4c20b6e69))
+* rename watchedLogins to watchedStreamerNames and add watch start/stop logs ([5710431](https://github.com/jackra1n/Lurk/commit/5710431da9967410535728313177a9774b5a5c31))
+* simplify gql error message deduplication ([4e0f675](https://github.com/jackra1n/Lurk/commit/4e0f67540bbf17d59990535af74438aec9d4c730))
+* simplify rate limiter option checks ([3bca00a](https://github.com/jackra1n/Lurk/commit/3bca00ae4b85d4c689ddcb5b743ffe6a0f105204))
+* switch callers to use twitchPubSubPool ([aff5b5c](https://github.com/jackra1n/Lurk/commit/aff5b5ca1edff49442bdc88de838f6f5403cd9ca))
+
+
+### Tests
+
+* **pubsub:** add unit tests for PubSub pool behavior ([e2d849a](https://github.com/jackra1n/Lurk/commit/e2d849ab61a4355dda172aaef274327b389ea334))
+
+
+### CI/CD
+
+* optimize build for non-release events ([e60f113](https://github.com/jackra1n/Lurk/commit/e60f11393d5094968ce016a5a30d7543ab3ed738))
+
 ## [1.0.3](https://github.com/jackra1n/Lurk/compare/1.0.2...1.0.3) (2026-02-15)
 
 

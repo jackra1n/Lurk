@@ -1,5 +1,5 @@
+import { twitchPubSubPool } from '$lib/server/pubsub';
 import { twitchClient, type StreamInfo } from '$lib/server/twitch-client';
-import { twitchPubSub } from '$lib/server/pubsub';
 import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
@@ -75,7 +75,7 @@ export async function subscribeToPointsTopic(userId: string | null): Promise<voi
 	}
 
 	try {
-		await twitchPubSub.listen(`${PubSubTopicType.CommunityPointsUser}.${userId}`, true);
+		await twitchPubSubPool.listen(`${PubSubTopicType.CommunityPointsUser}.${userId}`, true);
 		logger.info({ userId }, 'Subscribed to user-level channel points topic');
 	} catch (error) {
 		logger.error({ err: error }, 'Failed to subscribe to user topic');
@@ -87,7 +87,7 @@ export async function subscribeToStreamer(state: StreamerState): Promise<void> {
 	if (!state.channelId) return;
 
 	try {
-		await twitchPubSub.listen(`${PubSubTopicType.VideoPlaybackById}.${state.channelId}`, false);
+		await twitchPubSubPool.listen(`${PubSubTopicType.VideoPlaybackById}.${state.channelId}`, false);
 		logger.info({ streamer: state.name }, 'Subscribed to stream status');
 	} catch (error) {
 		logger.error({ err: error, streamer: state.name }, 'Failed to subscribe to streamer topic');

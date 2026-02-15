@@ -40,8 +40,8 @@ export class AsyncRateLimiter {
 
 	constructor(options: RateLimiterOptions) {
 		const ratePerSecond = Number.isFinite(options.ratePerSecond) && options.ratePerSecond > 0 ? options.ratePerSecond : 1;
-		const burst = Number.isFinite(options.burst) && (options.burst ?? 0) > 0 ? options.burst! : ratePerSecond;
-		const maxQueue = Number.isFinite(options.maxQueue) && (options.maxQueue ?? 0) > 0 ? options.maxQueue! : 300;
+		const burst = Number.isFinite(options.burst) && options.burst! > 0 ? options.burst! : ratePerSecond;
+		const maxQueue = Number.isFinite(options.maxQueue) && options.maxQueue! > 0 ? options.maxQueue! : 300;
 
 		this.ratePerSecond = ratePerSecond;
 		this.burst = burst;

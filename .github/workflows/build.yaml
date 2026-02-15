@@ -72,6 +72,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup QEMU
+        if: github.event_name == 'release'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -97,12 +98,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Optionally Push
+      - name: Build (master) / Build and Push (release)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'release' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           pull: true
           push: ${{ github.event_name == 'release' }}
           tags: ${{ steps.meta.outputs.tags }}

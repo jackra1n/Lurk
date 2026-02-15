@@ -1,4 +1,4 @@
-import { twitchClient, encodeMinuteWatchedPayload } from '$lib/server/twitch';
+import { twitchClient, encodeMinuteWatchedPayload } from '$lib/server/twitch-client';
 import { twitchPubSub } from '$lib/server/pubsub';
 import { twitchAuth } from '$lib/server/auth';
 import { getStreamers } from '$lib/server/config';

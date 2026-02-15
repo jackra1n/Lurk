@@ -1,9 +1,19 @@
 import { randomBytes } from 'node:crypto';
-import { GQL_URL, CLIENT_ID, CLIENT_VERSION_FALLBACK, GQL_OPERATIONS, USER_AGENT } from './constants';
-import { getLogger } from './logger';
+import {
+	GQL_URL,
+	CLIENT_ID,
+	CLIENT_VERSION_FALLBACK,
+	GQL_OPERATIONS,
+	USER_AGENT
+} from '../constants';
+import { getLogger } from '../logger';
+import { AsyncRateLimiter, RateLimiterQueueFullError } from './rate-limiter';
 
 const VERSION_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
+const GQL_RATE_LIMIT_RPS = 5;
+const GQL_RATE_LIMIT_BURST = GQL_RATE_LIMIT_RPS;
+const GQL_RATE_LIMIT_MAX_QUEUE = 300;
 
 const logger = getLogger('TwitchClient');
 
@@ -46,6 +56,11 @@ export class TwitchClient {
 	private clientSessionId = randomBytes(16).toString('hex');
 	private clientVersion = CLIENT_VERSION_FALLBACK;
 	private lastVersionFetch = 0;
+	private gqlLimiter = new AsyncRateLimiter({
+		ratePerSecond: GQL_RATE_LIMIT_RPS,
+		burst: GQL_RATE_LIMIT_BURST,
+		maxQueue: GQL_RATE_LIMIT_MAX_QUEUE
+	});
 
 	setAuthToken(token: string): void {
 		this.authToken = token;
@@ -105,6 +120,7 @@ export class TwitchClient {
 		if (!this.authToken) {
 			throw new Error('Not authenticated');
 		}
+		const authToken = this.authToken;
 
 		const body = {
 			...operation,
@@ -114,19 +130,45 @@ export class TwitchClient {
 		try {
 			const clientVersion = await this.fetchClientVersion();
 
-			const response = await fetch(GQL_URL, {
-				method: 'POST',
-				headers: {
-					Authorization: `OAuth ${this.authToken}`,
-					'Client-Id': CLIENT_ID,
-					'Client-Version': clientVersion,
-					'Client-Session-Id': this.clientSessionId,
-					'User-Agent': USER_AGENT,
-					'X-Device-Id': this.deviceId,
-					'Content-Type': 'application/json'
+			const { value: response, waitMs, queueDepthAtEnqueue } = await this.gqlLimiter.schedule(
+				operation.operationName,
+				() =>
+					fetch(GQL_URL, {
+						method: 'POST',
+						headers: {
+							Authorization: `OAuth ${authToken}`,
+							'Client-Id': CLIENT_ID,
+							'Client-Version': clientVersion,
+							'Client-Session-Id': this.clientSessionId,
+							'User-Agent': USER_AGENT,
+							'X-Device-Id': this.deviceId,
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify(body)
+					})
+			);
+
+			logger.debug(
+				{
+					operation: operation.operationName,
+					waitMs,
+					queueDepth: queueDepthAtEnqueue,
+					ratePerSecond: this.gqlLimiter.getRatePerSecond(),
+					burst: this.gqlLimiter.getBurst()
 				},
-				body: JSON.stringify(body)
-			});
+				'GQL request sent via rate limiter'
+			);
+			if (waitMs > 1_500 || queueDepthAtEnqueue >= Math.floor(this.gqlLimiter.getMaxQueue() * 0.8)) {
+				logger.warn(
+					{
+						operation: operation.operationName,
+						waitMs,
+						queueDepth: queueDepthAtEnqueue,
+						maxQueue: this.gqlLimiter.getMaxQueue()
+					},
+					'GQL rate limiter queue is under pressure'
+				);
+			}
 
 			if (!response.ok) {
 				logger.error({ status: response.status, statusText: response.statusText }, 'GQL request failed');
@@ -150,6 +192,18 @@ export class TwitchClient {
 
 			return result;
 		} catch (error) {
+			if (error instanceof RateLimiterQueueFullError) {
+				logger.warn(
+					{
+						operation: operation.operationName,
+						queueDepth: this.gqlLimiter.getQueueDepth(),
+						maxQueue: error.maxQueue
+					},
+					'GQL request dropped because rate limiter queue is full'
+				);
+				return { errors: [{ message: 'RateLimiterQueueFull' }] };
+			}
+
 			logger.error({ err: error }, 'GQL request error');
 			return { errors: [{ message: String(error) }] };
 		}

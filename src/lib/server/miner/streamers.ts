@@ -1,4 +1,4 @@
-import { twitchClient, type StreamInfo } from '$lib/server/twitch';
+import { twitchClient, type StreamInfo } from '$lib/server/twitch-client';
 import { twitchPubSub } from '$lib/server/pubsub';
 import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';

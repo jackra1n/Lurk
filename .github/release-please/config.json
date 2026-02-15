@@ -25,16 +25,16 @@
           "section": "Dependencies"
         },
         {
+          "type": "refactor",
+          "section": "Refactoring"
+        },
+        {
           "type": "docs",
           "section": "Documentation"
         },
         {
           "type": "style",
           "section": "Styles"
-        },
-        {
-          "type": "refactor",
-          "section": "Refactoring"
         },
         {
           "type": "test",

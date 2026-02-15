@@ -81,7 +81,7 @@ describe('AsyncRateLimiter', () => {
 		});
 		const second = limiter.schedule('full-2', async () => 'second');
 
-		expect(limiter.schedule('full-3', async () => 'third')).rejects.toBeInstanceOf(RateLimiterQueueFullError);
+		await expect(limiter.schedule('full-3', async () => 'third')).rejects.toBeInstanceOf(RateLimiterQueueFullError);
 
 		await Promise.all([first, second]);
 		limiter.dispose();

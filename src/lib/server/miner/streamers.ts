@@ -1,4 +1,4 @@
-import { twitchClient, type StreamInfo } from '$lib/server/twitch';
+import { twitchClient, type StreamInfo } from '$lib/server/twitch-client';
 import { twitchPubSub } from '$lib/server/pubsub';
 import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
@@ -102,10 +102,10 @@ export async function checkStreamerOnline(state: StreamerState): Promise<void> {
 		return;
 	}
 
-	const streamInfo = await twitchClient.getStreamInfo(state.name);
+	const streamStatus = await twitchClient.getStreamInfoStatus(state.name);
 
-	if (streamInfo) {
-		applyStreamInfo(state, streamInfo);
+	if (streamStatus.kind === 'live') {
+		applyStreamInfo(state, streamStatus.info);
 		const wasOffline = !state.isLive;
 		if (wasOffline) {
 			state.isLive = true;
@@ -147,7 +147,7 @@ export async function checkStreamerOnline(state: StreamerState): Promise<void> {
 				logger.warn({ streamer: state.name }, 'Could not fetch spade URL');
 			}
 		}
-	} else {
+	} else if (streamStatus.kind === 'offline') {
 		if (state.isLive) {
 			const {
 				title: previousTitle,
@@ -174,6 +174,15 @@ export async function checkStreamerOnline(state: StreamerState): Promise<void> {
 			logger.info({ streamer: state.name }, 'Streamer went OFFLINE (verified via API)');
 		}
 		state.stream = createDefaultStreamData();
+	} else {
+		logger.warn(
+			{
+				streamer: state.name,
+				reason: streamStatus.reason,
+				errors: streamStatus.errors?.map((error) => error.message)
+			},
+			'Could not verify streamer status via API; preserving previous state'
+		);
 	}
 }
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.3](https://github.com/jackra1n/Lurk/compare/1.0.2...1.0.3) (2026-02-15)
+
+
+### Features
+
+* add login watcher change detection ([3666b05](https://github.com/jackra1n/Lurk/commit/3666b05c22a77c387f842f8c1e498ae5e1814624))
+* add watch_started/watch_stopped events and expose runtime balances ([cd53a65](https://github.com/jackra1n/Lurk/commit/cd53a65662501221b79090fc8ce1864b2dfbcbfc))
+* track streamer watch events and runtime balances ([b2f50cb](https://github.com/jackra1n/Lurk/commit/b2f50cb8810a99362b7d6e9d23868579bb209103))
+
+
+### Documentation
+
+* update local access port in readme ([fd30701](https://github.com/jackra1n/Lurk/commit/fd3070168961599daac059d23d44ceba42f73500))
+
+
+### Refactoring
+
+* stop logging specific events ([0cc6000](https://github.com/jackra1n/Lurk/commit/0cc60008637c87fa08e4558a7b8b75836216322e))
+
+
+### Miscellaneous
+
+* adjust release version ([5b8f367](https://github.com/jackra1n/Lurk/commit/5b8f3674e1b41c049df9cc31d78e8fb5945cfc7c))
+
 ## [1.0.2](https://github.com/jackra1n/Lurk/compare/1.0.1...1.0.2) (2026-02-14)
 
 

@@ -192,7 +192,9 @@ export const getChannelPointsAnalytics = ({
 			latestBalance: runtimeBalanceByLogin.has(streamerName) ? Number(runtimeBalance ?? 0) : fallbackBalance,
 			pointsEarned: aggregate?.pointsEarned ?? 0,
 			lastActiveAtMs: onlineStreamers.has(streamerName) ? requestTimestampMs : (aggregate?.lastOfflineAtMs ?? null),
-			lastWatchedAtMs: aggregate?.lastWatchedAtMs ?? null
+			lastWatchedAtMs: watchedStreamers.has(streamerName)
+				? requestTimestampMs
+				: (aggregate?.lastWatchedAtMs ?? null)
 		} satisfies StreamerAnalyticsItem;
 	});
 

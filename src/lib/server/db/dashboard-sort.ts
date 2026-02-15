@@ -75,8 +75,17 @@ export const sortStreamerAnalyticsItems = ({
 
 			if (leftWatched) return compareByLoginAZ(left, right);
 
+			const byLastWatched = compareNullableNumbers(
+				left.lastWatchedAtMs,
+				right.lastWatchedAtMs,
+				sortDir
+			);
+			if (byLastWatched !== 0) return byLastWatched;
+
 			return pickFirstNonZero(
-				compareNullableNumbers(left.lastWatchedAtMs, right.lastWatchedAtMs, sortDir),
+				left.lastWatchedAtMs === null && right.lastWatchedAtMs === null
+					? compareNullableNumbers(left.lastActiveAtMs, right.lastActiveAtMs, sortDir)
+					: 0,
 				compareByLoginAZ(left, right)
 			);
 		},

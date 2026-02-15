@@ -101,7 +101,7 @@ describe('sortStreamerAnalyticsItems', () => {
 		}
 	});
 
-	test('lastWatched canonical order prefers watched, then timestamp, then A-Z for equal timestamps', () => {
+	test('lastWatched canonical order prefers watched, then timestamp, then lastActive fallback, then A-Z', () => {
 		const scenario = buildScenario([
 			{ login: 'delta', latestBalance: 120, lastActiveAtMs: 9_000, lastWatchedAtMs: 6_000, isOnline: true, isWatched: true },
 			{ login: 'echo', latestBalance: 300, lastActiveAtMs: 8_500, lastWatchedAtMs: 6_000, isOnline: true, isWatched: true },
@@ -113,7 +113,7 @@ describe('sortStreamerAnalyticsItems', () => {
 		]);
 
 		const desc = loginsFor(scenario, 'lastWatched', 'desc');
-		expect(desc).toEqual(['delta', 'echo', 'bravo', 'charlie', 'alpha', 'foxtrot', 'golf']);
+		expect(desc).toEqual(['delta', 'echo', 'bravo', 'charlie', 'alpha', 'golf', 'foxtrot']);
 	});
 
 	test('lastWatched ignores online status for non-watched timestamp ties', () => {

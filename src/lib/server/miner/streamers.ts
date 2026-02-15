@@ -214,6 +214,7 @@ export async function claimBonus(
 	});
 
 	try {
+		logger.info(logContext, 'Claiming bonus');
 		const result = await twitchClient.claimBonus(channelId, claimId);
 		if (!result.ok) {
 			withEventStore('claim_failed', () => {
@@ -246,7 +247,6 @@ export async function claimBonus(
 				claimId
 			});
 		});
-		logger.info(logContext, 'Successfully claimed bonus');
 	} catch (error) {
 		withEventStore('claim_failed', () => {
 			eventStore.recordEvent({

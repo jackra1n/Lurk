@@ -77,9 +77,7 @@ async function handleCommunityPointsMessage(
 		const claimData = data as { data: ClaimAvailableData };
 		const { channel_id: channelId, id: claimId } = claimData.data.claim;
 		const streamer = findStreamerByChannelId(streamerStates, channelId);
-		const logContext = streamerContext(streamer, channelId);
 
-		logger.info(logContext, 'Claim available');
 		withEventStore('claim_available', () => {
 			eventStore.recordEvent({
 				streamer: {

@@ -1,5 +1,5 @@
 import { twitchClient, encodeMinuteWatchedPayload } from '$lib/server/twitch-client';
-import { twitchPubSub } from '$lib/server/pubsub';
+import { twitchPubSubPool } from '$lib/server/pubsub';
 import { twitchAuth } from '$lib/server/auth';
 import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
@@ -59,7 +59,7 @@ class MinerService {
 		}
 
 		this.persistWatchTransitions([]);
-		twitchPubSub.disconnect();
+		twitchPubSubPool.disconnect();
 		withEventStore('run_stop_failed_start', () => {
 			eventStore.stopRun('startup_failed');
 		});
@@ -168,7 +168,7 @@ class MinerService {
 		this.starting = true;
 		twitchClient.setAuthToken(authToken);
 		twitchClient.setDeviceId(twitchAuth.getDeviceId());
-		twitchPubSub.setAuthToken(authToken);
+		twitchPubSubPool.setAuthToken(authToken);
 
 		// Validate token and get user ID
 		const isValid = await twitchAuth.validateToken();
@@ -198,20 +198,20 @@ class MinerService {
 		this.tickCount = 0;
 
 		const deps = this.getEventHandlerDeps();
-		twitchPubSub.onMessage((topic, messageType, data) => {
+		twitchPubSubPool.onMessage((topic, messageType, data) => {
 			handlePubSubMessage(deps, topic, messageType, data);
 		});
 
-		twitchPubSub.onConnected(() => {
+		twitchPubSubPool.onConnected(() => {
 			logger.debug('PubSub connected');
 		});
 
-		twitchPubSub.onDisconnected(() => {
+		twitchPubSubPool.onDisconnected(() => {
 			logger.debug('PubSub disconnected');
 		});
 
 		try {
-			await twitchPubSub.connect();
+			await twitchPubSubPool.connect();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to connect to PubSub');
 			this.cleanupFailedStart();
@@ -294,7 +294,7 @@ class MinerService {
 		}
 
 		this.persistWatchTransitions([]);
-		twitchPubSub.disconnect();
+		twitchPubSubPool.disconnect();
 		withEventStore('run_stop', () => {
 			eventStore.stopRun('stopped');
 		});
@@ -419,7 +419,7 @@ class MinerService {
 			streamers: Array.from(this.streamerStates.values()),
 			tickCount: this.tickCount,
 			lastTick: this.lastTick,
-			pubsubConnected: twitchPubSub.isConnectedToPubSub(),
+			pubsubConnected: twitchPubSubPool.isConnectedToPubSub(),
 			userId: this.userId
 		};
 	}

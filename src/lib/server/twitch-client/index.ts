@@ -47,7 +47,101 @@ export type ClaimBonusResult =
 
 interface GqlResponse<T = unknown> {
 	data?: T;
-	errors?: Array<{ message: string }>;
+	errors?: GqlError[];
+}
+
+interface GqlError {
+	message: string;
+	path?: Array<string | number>;
+}
+
+type GqlErrorCategory = 'transient' | 'stale_query' | 'auth' | 'fatal';
+
+interface GqlErrorSummary {
+	category: GqlErrorCategory;
+	retryable: boolean;
+	persistedQueryNotFound: boolean;
+	messages: string[];
+}
+
+export type StreamInfoStatus =
+	| { kind: 'live'; info: StreamInfo }
+	| { kind: 'offline' }
+	| {
+			kind: 'unknown';
+			reason: 'gql_error' | 'not_authenticated';
+			errors?: GqlError[];
+	  };
+
+const RETRYABLE_GQL_MESSAGES = new Set([
+	'service timeout',
+	'service unavailable',
+	'context deadline exceeded',
+	'service error',
+	'server error'
+]);
+
+const AUTH_GQL_MESSAGE_PATTERNS = ['not authorized', 'unauthorized', 'authentication', 'invalid oauth', 'forbidden'];
+const PERSISTED_QUERY_NOT_FOUND = 'persistedquerynotfound';
+const MAX_GQL_ATTEMPTS = 4;
+const GQL_RETRY_BASE_DELAY_MS = 800;
+const GQL_RETRY_MAX_DELAY_MS = 10_000;
+
+const normalizeErrorMessage = (message: string) => message.trim().toLowerCase();
+
+const jitterDelay = (delayMs: number) => {
+	const jitter = (Math.random() * 0.4) - 0.2;
+	return Math.max(200, Math.round(delayMs * (1 + jitter)));
+};
+
+const summarizeGqlErrors = (errors: GqlError[]) =>
+	errors
+		.map((error) => error.message)
+		.filter((message, index, messages) => messages.indexOf(message) === index)
+		.slice(0, 4);
+
+function classifyGqlErrors(errors: GqlError[]): GqlErrorSummary {
+	const messages = summarizeGqlErrors(errors);
+	const normalized = messages.map(normalizeErrorMessage);
+	const persistedQueryNotFound = normalized.some((message) => message.includes(PERSISTED_QUERY_NOT_FOUND));
+	const transient = normalized.some((message) => RETRYABLE_GQL_MESSAGES.has(message));
+	const auth = normalized.some((message) =>
+		AUTH_GQL_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))
+	);
+
+	if (persistedQueryNotFound) {
+		return {
+			category: 'stale_query',
+			retryable: true,
+			persistedQueryNotFound: true,
+			messages
+		};
+	}
+
+	if (transient) {
+		return {
+			category: 'transient',
+			retryable: true,
+			persistedQueryNotFound: false,
+			messages
+		};
+	}
+
+	if (auth) {
+		return {
+			category: 'auth',
+			retryable: false,
+			persistedQueryNotFound: false,
+			messages
+		};
+	}
+
+	return {
+		category: 'fatal',
+		retryable: false,
+		persistedQueryNotFound: false,
+		messages
+	};
 }
 
 export class TwitchClient {
@@ -61,6 +155,15 @@ export class TwitchClient {
 		burst: GQL_RATE_LIMIT_BURST,
 		maxQueue: GQL_RATE_LIMIT_MAX_QUEUE
 	});
+
+	private retryDelayMs(attempt: number): number {
+		const exponential = GQL_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1);
+		return jitterDelay(Math.min(GQL_RETRY_MAX_DELAY_MS, exponential));
+	}
+
+	private sleep(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
 
 	setAuthToken(token: string): void {
 		this.authToken = token;
@@ -114,8 +217,7 @@ export class TwitchClient {
 
 	private async postGqlRequest<T = unknown>(
 		operation: (typeof GQL_OPERATIONS)[keyof typeof GQL_OPERATIONS],
-		variables?: Record<string, unknown>,
-		_retried = false
+		variables?: Record<string, unknown>
 	): Promise<GqlResponse<T>> {
 		if (!this.authToken) {
 			throw new Error('Not authenticated');
@@ -127,86 +229,162 @@ export class TwitchClient {
 			variables: variables || {}
 		};
 
-		try {
-			const clientVersion = await this.fetchClientVersion();
+		let refreshedForPersistedQuery = false;
 
-			const { value: response, waitMs, queueDepthAtEnqueue } = await this.gqlLimiter.schedule(
-				operation.operationName,
-				() =>
-					fetch(GQL_URL, {
-						method: 'POST',
-						headers: {
-							Authorization: `OAuth ${authToken}`,
-							'Client-Id': CLIENT_ID,
-							'Client-Version': clientVersion,
-							'Client-Session-Id': this.clientSessionId,
-							'User-Agent': USER_AGENT,
-							'X-Device-Id': this.deviceId,
-							'Content-Type': 'application/json'
-						},
-						body: JSON.stringify(body)
-					})
-			);
+		for (let attempt = 1; attempt <= MAX_GQL_ATTEMPTS; attempt += 1) {
+			try {
+				const clientVersion = await this.fetchClientVersion();
 
-			logger.debug(
-				{
-					operation: operation.operationName,
-					waitMs,
-					queueDepth: queueDepthAtEnqueue,
-					ratePerSecond: this.gqlLimiter.getRatePerSecond(),
-					burst: this.gqlLimiter.getBurst()
-				},
-				'GQL request sent via rate limiter'
-			);
-			if (waitMs > 1_500 || queueDepthAtEnqueue >= Math.floor(this.gqlLimiter.getMaxQueue() * 0.8)) {
-				logger.warn(
+				const { value: response, waitMs, queueDepthAtEnqueue } = await this.gqlLimiter.schedule(
+					operation.operationName,
+					() =>
+						fetch(GQL_URL, {
+							method: 'POST',
+							headers: {
+								Authorization: `OAuth ${authToken}`,
+								'Client-Id': CLIENT_ID,
+								'Client-Version': clientVersion,
+								'Client-Session-Id': this.clientSessionId,
+								'User-Agent': USER_AGENT,
+								'X-Device-Id': this.deviceId,
+								'Content-Type': 'application/json'
+							},
+							body: JSON.stringify(body)
+						})
+				);
+
+				logger.debug(
 					{
 						operation: operation.operationName,
+						attempt,
 						waitMs,
 						queueDepth: queueDepthAtEnqueue,
-						maxQueue: this.gqlLimiter.getMaxQueue()
+						ratePerSecond: this.gqlLimiter.getRatePerSecond(),
+						burst: this.gqlLimiter.getBurst()
 					},
-					'GQL rate limiter queue is under pressure'
+					'GQL request sent via rate limiter'
 				);
+				if (waitMs > 1_500 || queueDepthAtEnqueue >= Math.floor(this.gqlLimiter.getMaxQueue() * 0.8)) {
+					logger.warn(
+						{
+							operation: operation.operationName,
+							waitMs,
+							queueDepth: queueDepthAtEnqueue,
+							maxQueue: this.gqlLimiter.getMaxQueue()
+						},
+						'GQL rate limiter queue is under pressure'
+					);
+				}
+
+				if (!response.ok) {
+					const message = `HTTP ${response.status}`;
+					const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+					if (retryable && attempt < MAX_GQL_ATTEMPTS) {
+						const delayMs = this.retryDelayMs(attempt);
+						logger.debug(
+							{
+								operation: operation.operationName,
+								status: response.status,
+								attempt,
+								nextRetryInMs: delayMs
+							},
+							'Transient GQL HTTP failure, retrying'
+						);
+						await this.sleep(delayMs);
+						continue;
+					}
+
+					logger.warn(
+						{
+							operation: operation.operationName,
+							status: response.status,
+							statusText: response.statusText,
+							attempt
+						},
+						'GQL request failed'
+					);
+					return { errors: [{ message }] };
+				}
+
+				const result: GqlResponse<T> = await response.json();
+				const errors = result.errors ?? [];
+				if (errors.length === 0) {
+					return result;
+				}
+
+				const summary = classifyGqlErrors(errors);
+				if (summary.persistedQueryNotFound && !refreshedForPersistedQuery) {
+					refreshedForPersistedQuery = true;
+					logger.warn(
+						{
+							operation: operation.operationName,
+							attempt
+						},
+						'PersistedQueryNotFound encountered, refreshing client version'
+					);
+					await this.fetchClientVersion(true);
+				}
+
+				if (summary.retryable && attempt < MAX_GQL_ATTEMPTS) {
+					const delayMs = this.retryDelayMs(attempt);
+					logger.debug(
+						{
+							operation: operation.operationName,
+							attempt,
+							nextRetryInMs: delayMs,
+							errors: summary.messages
+						},
+						'Transient GQL error, retrying'
+					);
+					await this.sleep(delayMs);
+					continue;
+				}
+
+				const context = {
+					operation: operation.operationName,
+					attempt,
+					errors: summary.messages
+				};
+				if (summary.category === 'fatal') {
+					logger.error(context, 'GQL request failed with non-retryable errors');
+				} else {
+					logger.warn(context, 'GQL request failed after retries');
+				}
+				return result;
+			} catch (error) {
+				if (error instanceof RateLimiterQueueFullError) {
+					logger.warn(
+						{
+							operation: operation.operationName,
+							queueDepth: this.gqlLimiter.getQueueDepth(),
+							maxQueue: error.maxQueue
+						},
+						'GQL request dropped because rate limiter queue is full'
+					);
+					return { errors: [{ message: 'RateLimiterQueueFull' }] };
+				}
+
+				if (attempt < MAX_GQL_ATTEMPTS) {
+					const delayMs = this.retryDelayMs(attempt);
+					logger.debug(
+						{
+							operation: operation.operationName,
+							attempt,
+							nextRetryInMs: delayMs,
+							error: String(error)
+						},
+						'GQL request errored, retrying'
+					);
+					await this.sleep(delayMs);
+					continue;
+				}
+
+				logger.error({ operation: operation.operationName, err: error }, 'GQL request error');
+				return { errors: [{ message: String(error) }] };
 			}
-
-			if (!response.ok) {
-				logger.error({ status: response.status, statusText: response.statusText }, 'GQL request failed');
-				return { errors: [{ message: `HTTP ${response.status}` }] };
-			}
-
-			const result: GqlResponse<T> = await response.json();
-
-			// try to auto-recover from stale persisted query hashes by refreshing client version
-			if (
-				!_retried &&
-				result.errors?.some((e) => e.message === 'PersistedQueryNotFound')
-			) {
-				logger.warn(
-					{ operation: operation.operationName },
-					'PersistedQueryNotFound - refreshing client version and retrying'
-				);
-				await this.fetchClientVersion(true);
-				return this.postGqlRequest<T>(operation, variables, true);
-			}
-
-			return result;
-		} catch (error) {
-			if (error instanceof RateLimiterQueueFullError) {
-				logger.warn(
-					{
-						operation: operation.operationName,
-						queueDepth: this.gqlLimiter.getQueueDepth(),
-						maxQueue: error.maxQueue
-					},
-					'GQL request dropped because rate limiter queue is full'
-				);
-				return { errors: [{ message: 'RateLimiterQueueFull' }] };
-			}
-
-			logger.error({ err: error }, 'GQL request error');
-			return { errors: [{ message: String(error) }] };
 		}
+
+		return { errors: [{ message: 'GqlRetryExhausted' }] };
 	}
 
 	async getUserId(login: string): Promise<string | null> {
@@ -221,7 +399,7 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			logger.error({ login, errors: response.errors }, 'Failed to get user ID');
+			logger.error({ login, errors: summarizeGqlErrors(response.errors) }, 'Failed to get user ID');
 			return null;
 		}
 
@@ -273,12 +451,15 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			logger.error({ channelLogin, errors: response.errors }, 'Failed to get channel points context');
+			logger.error(
+				{ channelLogin, errors: summarizeGqlErrors(response.errors) },
+				'Failed to get channel points context'
+			);
 			return null;
 		}
 
 		if (!response.data?.community?.channel) {
-			logger.error({ channelLogin }, 'Channel points context missing channel data');
+			logger.debug({ channelLogin }, 'Channel points context missing channel data');
 			return null;
 		}
 
@@ -290,9 +471,9 @@ export class TwitchClient {
 		};
 	}
 
-	async getStreamInfo(channelLogin: string): Promise<StreamInfo | null> {
+	async getStreamInfoStatus(channelLogin: string): Promise<StreamInfoStatus> {
 		if (!this.isAuthenticated()) {
-			return null;
+			return { kind: 'unknown', reason: 'not_authenticated' };
 		}
 
 		interface StreamInfoResponse {
@@ -313,22 +494,33 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			logger.error({ channelLogin, errors: response.errors }, 'Failed to get stream info');
-			return null;
+			logger.error(
+				{ channelLogin, errors: summarizeGqlErrors(response.errors) },
+				'Failed to get stream info'
+			);
+			return { kind: 'unknown', reason: 'gql_error', errors: response.errors };
 		}
 
 		const stream = response.data?.user?.stream;
 		if (!stream) {
-			return null;
+			return { kind: 'offline' };
 		}
 
 		return {
-			broadcastId: stream.id,
-			title: stream.title,
-			game: stream.game,
-			tags: (stream.freeformTags || []).map((t) => ({ localizedName: t.name })),
-			viewersCount: stream.viewersCount
+			kind: 'live',
+			info: {
+				broadcastId: stream.id,
+				title: stream.title,
+				game: stream.game,
+				tags: (stream.freeformTags || []).map((t) => ({ localizedName: t.name })),
+				viewersCount: stream.viewersCount
+			}
 		};
+	}
+
+	async getStreamInfo(channelLogin: string): Promise<StreamInfo | null> {
+		const status = await this.getStreamInfoStatus(channelLogin);
+		return status.kind === 'live' ? status.info : null;
 	}
 
 	async claimBonus(channelId: string, claimId: string): Promise<ClaimBonusResult> {
@@ -421,7 +613,10 @@ export class TwitchClient {
 		);
 
 		if (response.errors) {
-			logger.error({ login: streamerName, errors: response.errors }, 'Failed to get playback access token');
+			logger.error(
+				{ login: streamerName, errors: summarizeGqlErrors(response.errors) },
+				'Failed to get playback access token'
+			);
 			return null;
 		}
 

@@ -28,6 +28,8 @@ Canonical channel identity used by all event tables.
 - `login` (nullable)
 - `channel_id` (nullable)
 - `display_name` (optional)
+- `channel_points_status` (`unknown`, `enabled`, `disabled`)
+- `channel_points_status_checked_at_ms` (last capability check timestamp)
 - `created_at_ms`, `updated_at_ms`
 
 At least one of `login` or `channel_id` is required.

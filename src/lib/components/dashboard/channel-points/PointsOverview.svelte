@@ -42,7 +42,7 @@
 		selectedStreamer ? runtimeStateByLogin.get(selectedStreamer.login) : undefined
 	);
 	const channelPointsDisabledTooltip =
-		'Channel points are disabled for this streamer. Lurk will not use watch slots here until points are enabled again.';
+		'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
 
 <Card class="bg-card/80">
@@ -52,8 +52,10 @@
 				<CardTitle class="text-lg">Channel Points</CardTitle>
 				<CardDescription class="text-sm">
 					{#if selectedStreamer}
-						<span class="inline-flex flex-wrap items-center gap-2">
-							<span>{selectedStreamer.login} · {selectedStreamer.latestBalance.toLocaleString()} pts</span>
+						<span class="inline-flex w-full items-center justify-between gap-2">
+							<span class="min-w-0 truncate">
+								{selectedStreamer.login} · {selectedStreamer.latestBalance.toLocaleString()} pts
+							</span>
 							{#if selectedStreamerRuntimeState?.channelPointsDisabled}
 								<Tooltip.Root>
 									<Tooltip.Trigger aria-label={channelPointsDisabledTooltip}>

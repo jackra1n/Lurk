@@ -71,7 +71,7 @@
 	};
 
 	const channelPointsDisabledTooltip =
-		'Channel points are disabled for this streamer. Lurk will not use watch slots here until points are enabled again.';
+		'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
 
 <div class="space-y-2">
@@ -139,27 +139,29 @@
 							</Tooltip.Content>
 						</Tooltip.Root>
 						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-1.5">
-								<p class="text-sm font-medium">{streamer.login}</p>
+							<div class="flex items-center justify-between gap-2">
+								<p class="min-w-0 truncate text-sm font-medium">{streamer.login}</p>
 								{#if streamerState?.channelPointsDisabled}
-									<Tooltip.Root>
-										<Tooltip.Trigger aria-label={channelPointsDisabledTooltip}>
-											{#snippet child({ props })}
-												{@const { type: _type, ...triggerProps } = props}
-												<Badge
-													{...triggerProps}
-													variant="outline"
-													class="border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-												>
-													<TriangleAlert class="size-3" />
-													Points Off
-												</Badge>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Content side="top" sideOffset={8}>
-											{channelPointsDisabledTooltip}
-										</Tooltip.Content>
-									</Tooltip.Root>
+									<div class="shrink-0">
+										<Tooltip.Root>
+											<Tooltip.Trigger aria-label={channelPointsDisabledTooltip}>
+												{#snippet child({ props })}
+													{@const { type: _type, ...triggerProps } = props}
+													<Badge
+														{...triggerProps}
+														variant="outline"
+														class="border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+													>
+														<TriangleAlert class="size-3" />
+														Points Off
+													</Badge>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Content side="top" sideOffset={8}>
+												{channelPointsDisabledTooltip}
+											</Tooltip.Content>
+										</Tooltip.Root>
+									</div>
 								{/if}
 							</div>
 							<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">

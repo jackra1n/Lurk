@@ -11,6 +11,8 @@ import {
 } from './types';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
+import { setStreamerChannelPointsState } from '$lib/server/db/streamers';
+import { CHANNEL_POINTS_STATUS } from './channel-points-status';
 
 const logger = getLogger('Miner');
 
@@ -125,6 +127,21 @@ async function handleCommunityPointsMessage(
 		}
 
 		if (streamer) {
+			if (streamer.channelPointsStatus !== CHANNEL_POINTS_STATUS.Enabled) {
+				streamer.channelPointsStatus = CHANNEL_POINTS_STATUS.Enabled;
+				streamer.channelPointsStatusCheckedAtMs = Date.now();
+				setStreamerChannelPointsState(
+					{
+						login: streamer.name,
+						channelId: streamer.channelId
+					},
+					{
+						status: streamer.channelPointsStatus,
+						checkedAtMs: streamer.channelPointsStatusCheckedAtMs
+					}
+				);
+			}
+
 			streamer.channelPoints = balance.balance;
 
 			if (point_gain.reason_code === 'WATCH_STREAK') {

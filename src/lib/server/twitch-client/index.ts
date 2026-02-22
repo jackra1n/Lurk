@@ -35,6 +35,7 @@ export interface ChannelPointsContext {
 	balance: number;
 	availableClaimId: string | null;
 	activeMultipliers: { factor: number }[];
+	channelPointsEnabled: boolean | null;
 }
 
 export type ClaimBonusResult =
@@ -438,6 +439,9 @@ export class TwitchClient {
 							activeMultipliers: { factor: number }[];
 						};
 					};
+					communityPointsSettings?: {
+						isEnabled?: boolean | null;
+					} | null;
 				};
 			} | null;
 		}
@@ -464,7 +468,8 @@ export class TwitchClient {
 		return {
 			balance: points.balance,
 			availableClaimId: points.availableClaim?.id || null,
-			activeMultipliers: points.activeMultipliers || []
+			activeMultipliers: points.activeMultipliers || [],
+			channelPointsEnabled: response.data.community.channel.communityPointsSettings?.isEnabled ?? null
 		};
 	}
 

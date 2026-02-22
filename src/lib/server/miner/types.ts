@@ -1,3 +1,5 @@
+import type { ChannelPointsStatus } from './channel-points-status';
+
 export interface StreamData {
 	broadcastId: string | null;
 	title: string | null;
@@ -31,6 +33,8 @@ export interface StreamerState {
 	channelId: string | null;
 	isLive: boolean;
 	channelPoints: number;
+	channelPointsStatus: ChannelPointsStatus;
+	channelPointsStatusCheckedAtMs: number;
 	startingPoints: number | null;
 	offlineAt: number; // confirmed offline, used for 60-second debounce
 	lastContextRefresh: number; // epoch ms

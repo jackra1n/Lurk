@@ -25,6 +25,7 @@ export interface StreamerRuntimeState {
 	login: string;
 	isOnline: boolean;
 	isWatched: boolean;
+	channelPointsDisabled: boolean;
 }
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';

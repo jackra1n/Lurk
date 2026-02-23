@@ -224,7 +224,18 @@
 		const nextLifecycle = (payload as { lifecycle?: unknown }).lifecycle;
 		const nextReason = (payload as { reason?: unknown }).reason;
 		const configuredStreamers = (payload as { configuredStreamers?: unknown }).configuredStreamers;
+		const streamers = (payload as { streamers?: unknown }).streamers;
 		const streamerRuntimeStates = (payload as { streamerRuntimeStates?: unknown }).streamerRuntimeStates;
+		const disabledStreamers = new Set(
+			Array.isArray(streamers)
+				? streamers.flatMap((value) => {
+						if (!value || typeof value !== 'object') return [];
+						const name = (value as { name?: unknown }).name;
+						const channelPointsStatus = (value as { channelPointsStatus?: unknown }).channelPointsStatus;
+						return typeof name === 'string' && channelPointsStatus === 'disabled' ? [name] : [];
+					})
+				: []
+		);
 
 		return {
 			running: Boolean((payload as { running?: unknown }).running),
@@ -242,7 +253,8 @@
 							{
 								login,
 								isOnline: Boolean((value as { isOnline?: unknown }).isOnline),
-								isWatched: Boolean((value as { isWatched?: unknown }).isWatched)
+								isWatched: Boolean((value as { isWatched?: unknown }).isWatched),
+								channelPointsDisabled: disabledStreamers.has(login)
 							}
 						];
 					})

@@ -8,11 +8,17 @@ export const streamers = sqliteTable(
 		login: text('login'),
 		channelId: text('channel_id'),
 		displayName: text('display_name'),
+		channelPointsStatus: text('channel_points_status').notNull().default('unknown'),
+		channelPointsStatusCheckedAtMs: integer('channel_points_status_checked_at_ms').notNull().default(0),
 		createdAtMs: integer('created_at_ms').notNull(),
 		updatedAtMs: integer('updated_at_ms').notNull()
 	},
 	(table) => [
 		check('streamers_login_or_channel_id_check', sql`${table.login} IS NOT NULL OR ${table.channelId} IS NOT NULL`),
+		check(
+			'streamers_channel_points_status_check',
+			sql`${table.channelPointsStatus} IN ('unknown', 'enabled', 'disabled')`
+		),
 		uniqueIndex('idx_streamers_login_unique').on(table.login).where(sql`${table.login} IS NOT NULL`),
 		uniqueIndex('idx_streamers_channel_id_unique').on(table.channelId).where(sql`${table.channelId} IS NOT NULL`)
 	]
@@ -109,4 +115,3 @@ export const balanceSamples = sqliteTable(
 		index('idx_balance_samples_streamer_time').on(table.streamerId, table.sampledAtMs)
 	]
 );
-

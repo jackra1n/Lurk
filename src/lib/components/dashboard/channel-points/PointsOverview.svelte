@@ -1,9 +1,12 @@
 <script lang="ts">
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import DateRangePicker from './DateRangePicker.svelte';
 	import PointsChart from './PointsChart.svelte';
 	import StreamerList from './StreamerList.svelte';
+	import { Badge } from '$lib/components/ui/badge';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import type {
 		ChannelPointsAnalyticsResponse,
 		ChannelPointsControlChange,
@@ -32,6 +35,14 @@
 	const selectedStreamer = $derived(
 		analytics?.streamers.find((streamer) => streamer.login === analytics.selectedStreamerLogin) ?? null
 	);
+	const runtimeStateByLogin = $derived(
+		new Map(streamerRuntimeStates.map((streamerState) => [streamerState.login, streamerState]))
+	);
+	const selectedStreamerRuntimeState = $derived(
+		selectedStreamer ? runtimeStateByLogin.get(selectedStreamer.login) : undefined
+	);
+	const channelPointsDisabledTooltip =
+		'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
 
 <Card class="bg-card/80">
@@ -41,7 +52,31 @@
 				<CardTitle class="text-lg">Channel Points</CardTitle>
 				<CardDescription class="text-sm">
 					{#if selectedStreamer}
-						{selectedStreamer.login} · {selectedStreamer.latestBalance.toLocaleString()} pts
+						<span class="inline-flex w-full items-center justify-between gap-2">
+							<span class="min-w-0 truncate">
+								{selectedStreamer.login} · {selectedStreamer.latestBalance.toLocaleString()} pts
+							</span>
+							{#if selectedStreamerRuntimeState?.channelPointsDisabled}
+								<Tooltip.Root>
+									<Tooltip.Trigger aria-label={channelPointsDisabledTooltip}>
+										{#snippet child({ props })}
+											{@const { type: _type, ...triggerProps } = props}
+											<Badge
+												{...triggerProps}
+												variant="outline"
+												class="border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+											>
+												<TriangleAlert class="size-3" />
+												Points Off
+											</Badge>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Content side="top" sideOffset={8}>
+										{channelPointsDisabledTooltip}
+									</Tooltip.Content>
+								</Tooltip.Root>
+							{/if}
+						</span>
 					{:else}
 						Balance timeline and sorter for tracked streamers.
 					{/if}

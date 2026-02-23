@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
+	import { Badge } from '$lib/components/ui/badge';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Select from '$lib/components/ui/select';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -67,6 +69,9 @@
 		if (!minerRunning) return "Streamer status is not updated while the miner service isn't running.";
 		return streamerDotLabel(streamerState);
 	};
+
+	const channelPointsDisabledTooltip =
+		'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
 
 <div class="space-y-2">
@@ -134,7 +139,31 @@
 							</Tooltip.Content>
 						</Tooltip.Root>
 						<div class="min-w-0 flex-1">
-							<p class="text-sm font-medium">{streamer.login}</p>
+							<div class="flex items-center justify-between gap-2">
+								<p class="min-w-0 truncate text-sm font-medium">{streamer.login}</p>
+								{#if streamerState?.channelPointsDisabled}
+									<div class="shrink-0">
+										<Tooltip.Root>
+											<Tooltip.Trigger aria-label={channelPointsDisabledTooltip}>
+												{#snippet child({ props })}
+													{@const { type: _type, ...triggerProps } = props}
+													<Badge
+														{...triggerProps}
+														variant="outline"
+														class="border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+													>
+														<TriangleAlert class="size-3" />
+														Points Off
+													</Badge>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Content side="top" sideOffset={8}>
+												{channelPointsDisabledTooltip}
+											</Tooltip.Content>
+										</Tooltip.Root>
+									</div>
+								{/if}
+							</div>
 							<div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
 								<span>{streamer.latestBalance.toLocaleString()} pts</span>
 								<span class="text-right">{relativeTime(timestampMs)}</span>

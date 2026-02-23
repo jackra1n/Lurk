@@ -4,14 +4,72 @@ import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
 import {
+	getStreamerChannelPointsState,
+	setStreamerChannelPointsState
+} from '$lib/server/db/streamers';
+import {
 	type StreamerState,
 	PubSubTopicType,
 	createDefaultStreamData,
 	findStreamerByChannelId,
 	streamerContext
 } from './types';
+import {
+	CHANNEL_POINTS_STATUS,
+	DEFAULT_CHANNEL_POINTS_STATUS,
+	DEFAULT_CHANNEL_POINTS_STATUS_CHECKED_AT_MS
+} from './channel-points-status';
 
 const logger = getLogger('Miner');
+const DISABLED_CHANNEL_POINTS_RECHECK_INTERVAL_MS = 12 * 60 * 60_000;
+
+function setChannelPointsStatus(
+	state: StreamerState,
+	nextStatus: StreamerState['channelPointsStatus'],
+	checkedAtMs: number
+): void {
+	const previousStatus = state.channelPointsStatus;
+	const changed = previousStatus !== nextStatus;
+
+	state.channelPointsStatus = nextStatus;
+	state.channelPointsStatusCheckedAtMs = checkedAtMs;
+
+	setStreamerChannelPointsState(
+		{
+			login: state.name,
+			channelId: state.channelId
+		},
+		{
+			status: nextStatus,
+			checkedAtMs
+		}
+	);
+
+	if (!changed) return;
+
+	if (nextStatus === CHANNEL_POINTS_STATUS.Disabled) {
+		logger.warn(
+			{
+				...streamerContext(state),
+				checkedAtMs
+			},
+			'Channel points are disabled or unavailable for streamer'
+		);
+		return;
+	}
+
+	if (previousStatus === CHANNEL_POINTS_STATUS.Disabled && nextStatus === CHANNEL_POINTS_STATUS.Enabled) {
+		logger.info({ ...streamerContext(state), checkedAtMs }, 'Channel points were re-enabled for streamer');
+	}
+}
+
+function shouldSkipContextRefreshForDisabledStatus(state: StreamerState): boolean {
+	return (
+		state.channelPointsStatus === CHANNEL_POINTS_STATUS.Disabled &&
+		state.channelPointsStatusCheckedAtMs > 0 &&
+		Date.now() - state.channelPointsStatusCheckedAtMs < DISABLED_CHANNEL_POINTS_RECHECK_INTERVAL_MS
+	);
+}
 
 export function withEventStore(operation: string, action: () => void): void {
 	try {
@@ -35,6 +93,8 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
 				channelId,
 				isLive: false,
 				channelPoints: 0,
+				channelPointsStatus: DEFAULT_CHANNEL_POINTS_STATUS,
+				channelPointsStatusCheckedAtMs: DEFAULT_CHANNEL_POINTS_STATUS_CHECKED_AT_MS,
 				startingPoints: null,
 				offlineAt: 0,
 				lastContextRefresh: 0,
@@ -56,6 +116,13 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
 					channelId: state.channelId
 				});
 			});
+
+			const persistedState = getStreamerChannelPointsState({
+				login: state.name,
+				channelId: state.channelId
+			});
+			state.channelPointsStatus = persistedState.status;
+			state.channelPointsStatusCheckedAtMs = persistedState.checkedAtMs;
 		}
 	}
 
@@ -278,9 +345,25 @@ export async function processStreamer(
 		return;
 	}
 
+	if (shouldSkipContextRefreshForDisabledStatus(state)) {
+		logger.debug({ streamer: state.name }, 'Skipping context refresh for disabled channel points (backoff)');
+		return;
+	}
+
 	// only refresh channel points context -- PubSub handles live status
 	const context = await twitchClient.getChannelPointsContext(state.name);
 	if (context) {
+		const checkedAtMs = Date.now();
+		if (context.channelPointsEnabled === false) {
+			setChannelPointsStatus(state, CHANNEL_POINTS_STATUS.Disabled, checkedAtMs);
+			return;
+		}
+		if (context.channelPointsEnabled === true) {
+			setChannelPointsStatus(state, CHANNEL_POINTS_STATUS.Enabled, checkedAtMs);
+		} else {
+			setChannelPointsStatus(state, CHANNEL_POINTS_STATUS.Unknown, checkedAtMs);
+		}
+
 		if (state.startingPoints === null) {
 			state.startingPoints = context.balance;
 		}
@@ -302,6 +385,8 @@ export async function processStreamer(
 			});
 			await claimBonus(streamerStates, state.channelId, context.availableClaimId, 'gql_context');
 		}
+	} else {
+		logger.warn({ streamer: state.name }, 'Streamer doesn\'t seem to have channel points context');
 	}
 }
 
@@ -314,6 +399,7 @@ export function selectStreamersToWatch(
 
 	for (const [, state] of streamerStates) {
 		if (
+			state.channelPointsStatus !== CHANNEL_POINTS_STATUS.Disabled &&
 			state.isLive &&
 			state.channelId &&
 			state.stream.broadcastId &&

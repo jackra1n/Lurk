@@ -34,6 +34,12 @@
 	const reasonValues: Exclude<LifecycleReason, null>[] = ['missing_token', 'invalid_token', 'auth_pending', 'startup_failed'];
 	const defaultAnalyticsRangeMs = 24 * 60 * 60 * 1000;
 	const initialAnalyticsRangeToMs = Date.now();
+	const hourMs = 60 * 60 * 1000;
+	const presetRangeDurationMs: Record<Exclude<ChannelPointsRangeSelection, 'calendar'>, number> = {
+		'24h': 24 * hourMs,
+		'7d': 7 * 24 * hourMs,
+		'30d': 30 * 24 * hourMs
+	};
 
 	const defaultAuthStatus: AuthStatusResponse = {
 		authenticated: false,
@@ -263,6 +269,7 @@
 	};
 
 	const fetchChannelPointsAnalytics = async () => {
+		syncRollingAnalyticsRangeToNow();
 		const query = new URLSearchParams({
 			from: String(analyticsRangeFromMs),
 			to: String(analyticsRangeToMs),
@@ -287,6 +294,17 @@
 		}
 
 		return payload as ChannelPointsAnalyticsResponse;
+	};
+
+	const syncRollingAnalyticsRangeToNow = () => {
+		if (analyticsRangeSelection === 'calendar') return;
+		const durationMs = presetRangeDurationMs[analyticsRangeSelection];
+		const nextToMs = Date.now();
+		const nextFromMs = nextToMs - durationMs;
+
+		if (analyticsRangeToMs === nextToMs && analyticsRangeFromMs === nextFromMs) return;
+		analyticsRangeToMs = nextToMs;
+		analyticsRangeFromMs = nextFromMs;
 	};
 
 	const refreshAnalytics = async (showLoading = false) => {

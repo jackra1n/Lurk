@@ -24,9 +24,33 @@
 	} satisfies ChartConfig;
 
 	const isMultiDayRange = $derived(rangeToMs - rangeFromMs > 24 * 60 * 60 * 1000);
+	const chartTimeline = $derived.by<ChannelPointSample[]>(() => {
+		if (timeline.length !== 1) return timeline;
+
+		const only = timeline[0];
+		const syntheticOffsetMs = 60 * 1000;
+		let syntheticTimestampMs = only.timestampMs - syntheticOffsetMs;
+
+		if (syntheticTimestampMs < rangeFromMs) {
+			syntheticTimestampMs = Math.min(rangeToMs, only.timestampMs + syntheticOffsetMs);
+		}
+
+		if (syntheticTimestampMs === only.timestampMs) {
+			syntheticTimestampMs = only.timestampMs === rangeFromMs ? rangeToMs : rangeFromMs;
+		}
+
+		if (syntheticTimestampMs === only.timestampMs) return timeline;
+
+		const syntheticSample = {
+			timestampMs: syntheticTimestampMs,
+			balance: only.balance
+		} satisfies ChannelPointSample;
+
+		return syntheticTimestampMs < only.timestampMs ? [syntheticSample, only] : [only, syntheticSample];
+	});
 
 	const chartYDomain = $derived.by<[number, number]>(() => {
-		const balances = timeline.map((item) => item.balance);
+		const balances = chartTimeline.map((item) => item.balance);
 		if (balances.length === 0) return [0, 1];
 
 		const min = Math.min(...balances);
@@ -60,14 +84,14 @@
 </script>
 
 <div class="space-y-2">
-	{#if timeline.length === 0}
+	{#if chartTimeline.length === 0}
 		<p class="rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-10 text-center text-sm text-muted-foreground">
 			No channel points history in this range.
 		</p>
 	{:else}
 		<ChartContainer config={chartConfig} class="h-90 w-full aspect-auto! overflow-hidden!">
 			<AreaChart
-				data={timeline}
+				data={chartTimeline}
 				x={(item) => new Date(item.timestampMs)}
 				xScale={scaleUtc()}
 				yDomain={chartYDomain}

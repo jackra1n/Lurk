@@ -1,5 +1,5 @@
 <script lang="ts">
-	import MostActiveStreamersCard from '../summary-cards/MostActiveStreamersCard.svelte';
+	import MostActiveStreamersCard from './MostActiveStreamersCard.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import type { StreamerActivityItem } from '../shared/types';
 

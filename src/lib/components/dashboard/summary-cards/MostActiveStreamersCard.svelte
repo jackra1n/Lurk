@@ -4,6 +4,8 @@
 	import { Card, CardContent, CardHeader } from '$lib/components/ui/card';
 	import { ChartContainer, ChartTooltip, type ChartConfig } from '$lib/components/ui/chart';
 	import type { StreamerActivityItem } from '../shared/types';
+	import CardTitle from '$lib/components/ui/card/card-title.svelte';
+	import CardDescription from '$lib/components/ui/card/card-description.svelte';
 
 	let {
 		streamers = [],
@@ -47,17 +49,18 @@
 
 </script>
 
-<Card class="bg-card/80 pb-0 block h-full">
-	<CardHeader class="gap-2 pb-0">
-		<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Most Active Streamers</p>
+<Card class="bg-card/80 pb-0 block">
+	<CardHeader class="gap-2">
+	    <CardTitle class="text-lg">Most Active Streamers</CardTitle>
+		<CardDescription>Last 7 days</CardDescription>
 	</CardHeader>
-	<CardContent class="p-0">
+	<CardContent>
 		{#if chartData.length === 0}
 			<p class="rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-6 text-center text-sm text-muted-foreground">
 				No streamers with at least {minimumOnlineHours}h online in the last {days} days.
 			</p>
 		{:else}
-			<ChartContainer config={chartConfig} class="h-64">
+			<ChartContainer config={chartConfig} class="h-56">
 				<BarChart
 					data={chartData}
 					x="login"

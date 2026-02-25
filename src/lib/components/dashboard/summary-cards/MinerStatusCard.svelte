@@ -73,7 +73,7 @@
 	};
 </script>
 
-<Card class="bg-card/80">
+<Card class="bg-card/80 block">
 	<CardHeader class="gap-2">
 		<div class="flex items-start justify-between gap-3">
 			<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Miner Status</p>
@@ -89,7 +89,7 @@
 				</Tooltip.Content>
 			</Tooltip.Root>
 		</div>
-		<CardTitle class="text-2xl">{minerLabel()}</CardTitle>
+		<CardTitle class="text-2xl pb-3">{minerLabel()}</CardTitle>
 	</CardHeader>
 	<CardContent class="pt-0">
 		{#if showStopState}

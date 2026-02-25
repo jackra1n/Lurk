@@ -45,7 +45,7 @@
 		'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
 
-<Card class="bg-card/80">
+<Card class="bg-card/80 block pb-0">
 	<CardHeader class="gap-3">
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import MostActiveStreamersCard from '../summary-cards/MostActiveStreamersCard.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import type { StreamerActivityItem } from '../shared/types';
@@ -17,14 +16,10 @@
 	<Card class="bg-card/80">
 		<CardHeader class="gap-3">
 			<div class="flex items-center justify-between gap-3">
-				<div>
-					<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Latest Event</p>
-					<CardTitle class="text-lg">Coming Soon</CardTitle>
-				</div>
-				<CalendarClock class="size-5 text-muted-foreground" />
+				<CardTitle class="text-lg">Recent Events</CardTitle>
 			</div>
 			<CardDescription>
-				This card will surface the newest noteworthy channel points event once event tracking lands.
+			WIP
 			</CardDescription>
 		</CardHeader>
 		<CardContent>

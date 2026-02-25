@@ -95,6 +95,20 @@
 		if (Number.isNaN(numeric)) return '';
 		return Math.round(numeric).toLocaleString('en-GB');
 	};
+
+	const yAxisLabelChars = $derived.by(() => {
+		const [min, max] = chartYDomain;
+		const span = max - min;
+		const sampleValues = [min, max, min + span * 0.25, min + span * 0.5, min + span * 0.75];
+		return Math.max(...sampleValues.map((value) => formatYAxisTick(value).length), 1);
+	});
+
+	const chartPadding = $derived.by(() => ({
+		top: 8,
+		right: 12,
+		bottom: 20,
+		left: 12 + yAxisLabelChars * 8
+	}));
 </script>
 
 <div class="space-y-2">
@@ -107,14 +121,14 @@
 			</p>
 		</div>
 	{:else}
-		<ChartContainer config={chartConfig} class="h-90 w-full aspect-auto! overflow-hidden!">
+		<ChartContainer config={chartConfig} class="h-96 w-full aspect-auto! overflow-hidden!">
 			<AreaChart
 				data={chartTimeline}
 				x={(item) => new Date(item.timestampMs)}
 				xScale={scaleUtc()}
 				yDomain={chartYDomain}
 				yBaseline={chartYDomain[0]}
-				padding={{ top: 8, right: 16, bottom: 24, left: 88 }}
+				padding={chartPadding}
 				series={[
 					{
 						key: 'balance',
@@ -123,7 +137,7 @@
 					}
 				]}
 				props={{
-					xAxis: { format: formatXAxisTick, ticks: getXAxisTicks, tickSpacing: 128, tickMultiline: true },
+					xAxis: { format: formatXAxisTick, ticks: getXAxisTicks, tickSpacing: 112 },
 					yAxis: { format: formatYAxisTick, tickSpacing: 56 },
 					area: {
 						curve: curveLinear,

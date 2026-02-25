@@ -23,22 +23,28 @@
 			.map((streamer) => {
 				const onlineHours = roundToOneDecimal(toHours(streamer.onlineMinutes));
 				const watchedHours = roundToOneDecimal(toHours(streamer.watchedMinutes));
+				const unwatchedHours = Math.max(0, roundToOneDecimal(onlineHours - watchedHours));
 
-			return {
-				login: streamer.login,
-				onlineHours,
-				watchedHours,
-				unwatchedHours: Math.max(0, roundToOneDecimal(onlineHours - watchedHours))
-			};
+				return {
+					login: streamer.login,
+					onlineHours,
+					watchedHours,
+					unwatchedHours,
+					watchedBottomHours: unwatchedHours > 0 ? watchedHours : 0,
+					watchedFullHours: unwatchedHours === 0 ? watchedHours : 0
+				};
 			})
 			.filter((streamer) => streamer.onlineHours >= minimumOnlineHours)
 	);
 
 	const chartConfig = {
+		watchedBottomHours: { label: 'Watched', color: '#38bdf8' },
+		watchedFullHours: { label: 'Watched', color: '#38bdf8' },
 		watchedHours: { label: 'Watched', color: '#38bdf8' },
 		unwatchedHours: { label: 'Online (not watched)', color: '#22c55e' },
 		onlineHours: { label: 'Online', color: '#22c55e' }
 	} satisfies ChartConfig;
+
 </script>
 
 <Card class="bg-card/80 pb-0 block">
@@ -58,15 +64,22 @@
 					yScale={scaleLinear().nice()}
 					series={[
 						{
-							key: 'watchedHours',
+							key: 'watchedBottomHours',
 							label: 'Watched',
-							color: chartConfig.watchedHours.color,
+							color: chartConfig.watchedBottomHours.color,
 							props: { rounded: 'bottom' }
 						},
 						{
 							key: 'unwatchedHours',
 							label: 'Online (not watched)',
-							color: chartConfig.unwatchedHours.color
+							color: chartConfig.unwatchedHours.color,
+							props: { rounded: 'edge' }
+						},
+						{
+							key: 'watchedFullHours',
+							label: 'Watched',
+							color: chartConfig.watchedFullHours.color,
+							props: { rounded: 'all' }
 						}
 					]}
 					seriesLayout="stack"

@@ -59,6 +59,9 @@
 		return 'bg-red-500';
 	};
 
+	const streamerDotIsWatched = (streamerState?: StreamerRuntimeState) =>
+		minerRunning && Boolean(streamerState?.isWatched);
+
 	const streamerDotLabel = (streamerState?: StreamerRuntimeState) => {
 		if (streamerState?.isWatched) return 'Watching';
 		if (streamerState?.isOnline) return 'Online';
@@ -114,6 +117,7 @@
 			{#each streamers as streamer (streamer.login)}
 				{@const streamerState = runtimeStateByLogin.get(streamer.login)}
 				{@const timestampMs = controls.sortBy === 'lastWatched' ? streamer.lastWatchedAtMs : streamer.lastActiveAtMs}
+				{@const isWatched = streamerDotIsWatched(streamerState)}
 				<button
 					type="button"
 					class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
@@ -130,8 +134,21 @@
 									{@const { type: _type, ...triggerProps } = props}
 									<span
 										{...triggerProps}
-										class={`size-2 shrink-0 rounded-full ${streamerDotClass(streamerState)}`}
-									></span>
+										class="relative inline-flex size-2.5 shrink-0 items-center justify-center"
+									>
+										{#if isWatched}
+											<span
+												class="absolute inset-0 rounded-full bg-primary/35 animate-ping motion-reduce:animate-none"
+											></span>
+										{/if}
+										<span
+											class={`relative size-2 rounded-full ${streamerDotClass(streamerState)} ${
+												isWatched
+													? 'shadow-[0_0_0_2px_color-mix(in_lch,var(--primary)_24%,transparent)]'
+													: ''
+											}`}
+										></span>
+									</span>
 								{/snippet}
 							</Tooltip.Trigger>
 							<Tooltip.Content side="top" sideOffset={8}>

@@ -93,3 +93,15 @@ export interface ChannelPointsAnalyticsResponse {
 	selectedStreamerLogin: string | null;
 	timeline: ChannelPointSample[];
 }
+
+export interface StreamerActivityItem {
+	login: string;
+	onlineMinutes: number;
+	watchedMinutes: number;
+}
+
+export interface StreamerActivityResponse {
+	success: boolean;
+	days: number;
+	streamers: StreamerActivityItem[];
+}

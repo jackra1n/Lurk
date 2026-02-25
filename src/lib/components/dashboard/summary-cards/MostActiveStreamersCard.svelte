@@ -47,7 +47,7 @@
 
 </script>
 
-<Card class="bg-card/80 pb-0 block">
+<Card class="bg-card/80 pb-0 block h-full">
 	<CardHeader class="gap-2 pb-0">
 		<p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Most Active Streamers</p>
 	</CardHeader>
@@ -57,7 +57,7 @@
 				No streamers with at least {minimumOnlineHours}h online in the last {days} days.
 			</p>
 		{:else}
-			<ChartContainer config={chartConfig} class="h-44">
+			<ChartContainer config={chartConfig} class="h-64">
 				<BarChart
 					data={chartData}
 					x="login"

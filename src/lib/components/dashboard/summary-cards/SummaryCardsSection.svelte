@@ -1,13 +1,12 @@
 <script lang="ts">
 	import MinerStatusCard from './MinerStatusCard.svelte';
-	import MostActiveStreamersCard from './MostActiveStreamersCard.svelte';
+	import PointsEarnedCard from './PointsEarnedCard.svelte';
 	import TrackedChannelsCard from './TrackedChannelsCard.svelte';
-	import type { ChannelPointsAnalyticsSummary, MinerStatusResponse, StreamerActivityItem } from '../shared/types';
+	import type { ChannelPointsAnalyticsSummary, MinerStatusResponse } from '../shared/types';
 
 	let {
 		minerStatus,
 		summary,
-		streamerActivity = [],
 		startDisabled = false,
 		stopDisabled = false,
 		actionPhase = 'idle',
@@ -16,7 +15,6 @@
 	}: {
 		minerStatus: MinerStatusResponse;
 		summary: ChannelPointsAnalyticsSummary | null;
-		streamerActivity?: StreamerActivityItem[];
 		startDisabled?: boolean;
 		stopDisabled?: boolean;
 		actionPhase?: 'idle' | 'starting' | 'stopping';
@@ -38,5 +36,5 @@
 		trackedChannels={summary?.trackedChannels ?? minerStatus.configuredStreamers.length}
 		liveChannels={minerStatus.streamerRuntimeStates.filter((streamer) => streamer.isOnline).length}
 	/>
-	<MostActiveStreamersCard streamers={streamerActivity} />
+	<PointsEarnedCard pointsEarned={summary?.pointsEarnedThisSession ?? 0} />
 </section>

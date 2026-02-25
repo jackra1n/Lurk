@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HeaderSection from '../header/HeaderSection.svelte';
+	import ChannelPointsInsightsSection from '../channel-points/ChannelPointsInsightsSection.svelte';
 	import PointsOverview from '../channel-points/PointsOverview.svelte';
 	import DashboardNotice from '../shared/DashboardNotice.svelte';
 	import SummaryCardsSection from '../summary-cards/SummaryCardsSection.svelte';
@@ -506,7 +507,6 @@
 		<SummaryCardsSection
 			{minerStatus}
 			summary={analytics?.summary ?? null}
-			{streamerActivity}
 			startDisabled={startMinerDisabled}
 			stopDisabled={stopMinerDisabled}
 			actionPhase={quickActionsActionPhase}
@@ -525,6 +525,8 @@
 				onControlChange={handleChannelPointsControlChange}
 			/>
 		</section>
+
+		<ChannelPointsInsightsSection streamers={streamerActivity} />
 
 	</main>
 

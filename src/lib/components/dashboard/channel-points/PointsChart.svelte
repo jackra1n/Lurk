@@ -18,7 +18,7 @@
 
 	const chartConfig = {
 		balance: {
-			label: 'Channel Points',
+			label: 'Points',
 			color: 'var(--chart-1)'
 		}
 	} satisfies ChartConfig;

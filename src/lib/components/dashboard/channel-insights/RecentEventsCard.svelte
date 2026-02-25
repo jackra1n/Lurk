@@ -2,13 +2,29 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import type { ChannelPointsRecentEventItem } from '../shared/types';
+
+	type EventKind =
+		| 'points_watch'
+		| 'points_claim'
+		| 'stream_online'
+		| 'stream_offline'
+		| 'watch_started'
+		| 'watch_stopped'
+		| 'other';
+
+	interface RecentEventItem {
+		id: string;
+		login: string;
+		occurredAtMs: number;
+		kind: EventKind;
+		pointsDelta: number | null;
+	}
 
 	const initialVisibleEvents = 24;
 	const visibleEventsStep = 24;
 	const lazyLoadThresholdPx = 96;
 
-	let { events = [] }: { events?: ChannelPointsRecentEventItem[] } = $props();
+	let { events = [] }: { events?: RecentEventItem[] } = $props();
 
 	let eventsViewport = $state<HTMLElement | null>(null);
 	let visibleEventsCount = $state(0);
@@ -40,17 +56,22 @@
 		watch_started: 'Started watching',
 		watch_stopped: 'Stopped watching',
 		other: 'Event'
-	} satisfies Record<ChannelPointsRecentEventItem['kind'], string>;
+	} satisfies Record<EventKind, string>;
 
 	const eventDotClassByKind = {
-		points_watch: 'bg-primary',
-		points_claim: 'bg-sky-500',
+		points_watch: '',
+		points_claim: '',
 		stream_online: 'bg-emerald-500',
-		stream_offline: 'bg-rose-500',
-		watch_started: 'bg-cyan-500',
-		watch_stopped: 'bg-slate-500',
+		stream_offline: 'bg-muted-foreground/60',
+		watch_started: '',
+		watch_stopped: 'bg-red-500',
 		other: 'bg-muted-foreground/70'
-	} satisfies Record<ChannelPointsRecentEventItem['kind'], string>;
+	} satisfies Record<EventKind, string>;
+
+	const getEventLabel = (kind: EventKind) => eventLabelByKind[kind];
+	const getEventDotClass = (kind: EventKind) => eventDotClassByKind[kind];
+	const usesPointsTone = (kind: EventKind) =>
+		kind === 'points_watch' || kind === 'points_claim' || kind === 'watch_started';
 
 	const visibleEvents = $derived(events.slice(0, visibleEventsCount));
 
@@ -98,21 +119,26 @@
 			<ScrollArea class="h-56" viewportRef={eventsViewport}>
 				<div class="space-y-1 pr-3">
 					{#each visibleEvents as event (event.id)}
-						<div class="rounded-md border border-border/70 bg-background/60 px-3 py-2">
+						<div class="rounded-md border border-border/70 bg-background/50 px-3 py-2">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0 flex-1">
 									<div class="flex items-center gap-2">
 										<span
-											class={`inline-flex size-2 shrink-0 rounded-full ${eventDotClassByKind[event.kind]}`}
+											class={`inline-flex size-2 shrink-0 rounded-full ${getEventDotClass(event.kind)}`}
+											style={usesPointsTone(event.kind)
+												? 'background-color: color-mix(in oklch, var(--primary) 72%, var(--background));'
+												: undefined}
 										></span>
 										<p class="truncate text-sm font-medium">{event.login}</p>
 									</div>
-									<p class="truncate text-xs text-muted-foreground">{eventLabelByKind[event.kind]}</p>
+									<p class="truncate text-xs text-muted-foreground">{getEventLabel(event.kind)}</p>
 								</div>
 								<div class="shrink-0 text-right">
 									<p
 										class={`text-sm font-medium tabular-nums ${
-											event.pointsDelta !== null && event.pointsDelta > 0 ? 'text-primary' : 'text-muted-foreground'
+											event.pointsDelta !== null && event.pointsDelta > 0
+												? 'text-emerald-700 dark:text-emerald-400'
+												: 'text-muted-foreground'
 										}`}
 									>
 										{event.pointsDelta !== null ? `+${event.pointsDelta.toLocaleString('en-GB')}` : '-'}

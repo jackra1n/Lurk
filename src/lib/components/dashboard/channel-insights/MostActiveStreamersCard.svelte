@@ -16,6 +16,9 @@
 	} = $props();
 
 	const minimumOnlineHours = 0.1;
+	const watchedColor = 'color-mix(in oklch, var(--primary) 72%, var(--background))';
+	const unwatchedColor = 'color-mix(in oklch, var(--muted-foreground) 55%, var(--background))';
+	const barStrokeColor = 'color-mix(in oklch, var(--foreground) 18%, var(--background))';
 	const toHours = (minutes: number) => minutes / 60;
 	const roundToOneDecimal = (value: number) => Math.round(value * 10) / 10;
 	const formatHours = (value: number) => `${value.toLocaleString('en-GB', { maximumFractionDigits: 1, minimumFractionDigits: 1 })} h`;
@@ -40,11 +43,11 @@
 	);
 
 	const chartConfig = {
-		watchedBottomHours: { label: 'Watched', color: 'var(--primary)' },
-		watchedFullHours: { label: 'Watched', color: 'var(--primary)' },
-		watchedHours: { label: 'Watched', color: 'var(--primary)' },
-		unwatchedHours: { label: 'Online (not watched)', color: '#22c55e' },
-		onlineHours: { label: 'Online', color: '#22c55e' }
+		watchedBottomHours: { label: 'Watched', color: watchedColor },
+		watchedFullHours: { label: 'Watched', color: watchedColor },
+		watchedHours: { label: 'Watched', color: watchedColor },
+		unwatchedHours: { label: 'Online (not watched)', color: unwatchedColor },
+		onlineHours: { label: 'Online', color: unwatchedColor }
 	} satisfies ChartConfig;
 
 </script>
@@ -93,7 +96,8 @@
 						xAxis: { format: (d: unknown) => String(d).slice(0, 8) },
 						highlight: { area: false },
 						bars: {
-							strokeWidth: 0,
+							stroke: barStrokeColor,
+							strokeWidth: 1,
 							rx: 4
 						}
 					}}

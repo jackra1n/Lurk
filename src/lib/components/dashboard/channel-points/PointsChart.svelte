@@ -76,6 +76,20 @@
 		});
 	};
 
+	const getScaleTickCount = (scale: unknown) => {
+		if (!scale || (typeof scale !== 'object' && typeof scale !== 'function') || !('range' in scale))
+			return 4;
+		const range = (scale as { range: () => number[] }).range();
+		const width = range.length >= 2 ? Math.abs(range[range.length - 1] - range[0]) : 0;
+		return Math.max(2, Math.min(6, Math.round(width / 140)));
+	};
+
+	const getXAxisTicks = (scale: unknown) => {
+		if (!scale || (typeof scale !== 'object' && typeof scale !== 'function') || !('ticks' in scale))
+			return [];
+		return (scale as { ticks: (count?: number) => unknown[] }).ticks(getScaleTickCount(scale));
+	};
+
 	const formatYAxisTick = (value: unknown) => {
 		const numeric = typeof value === 'number' ? value : Number(value);
 		if (Number.isNaN(numeric)) return '';
@@ -105,7 +119,7 @@
 					}
 				]}
 				props={{
-					xAxis: { format: formatXAxisTick, tickSpacing: 84 },
+					xAxis: { format: formatXAxisTick, ticks: getXAxisTicks, tickSpacing: 128, tickMultiline: true },
 					yAxis: { format: formatYAxisTick, tickSpacing: 56 },
 					area: {
 						curve: curveLinear,

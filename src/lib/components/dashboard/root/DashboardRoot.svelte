@@ -16,7 +16,8 @@
 		LifecycleReason,
 		MinerLifecycle,
 		MinerStatusResponse,
-		SortDir
+		SortDir,
+		StreamerActivityItem
 	} from '../shared/types';
 
 	const themeStorageKey = 'theme';
@@ -70,6 +71,7 @@
 	let loadingStartAfterAuth = $state(false);
 	let loadingMinerAction = $state(false);
 	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
+	let streamerActivity = $state<StreamerActivityItem[]>([]);
 	let analyticsLoading = $state(false);
 	let analyticsErrorMessage = $state<string | null>(null);
 	let analyticsSortBy = $state<ChannelPointsSortBy>('lastWatched');
@@ -296,6 +298,22 @@
 		return payload as ChannelPointsAnalyticsResponse;
 	};
 
+	const fetchStreamerActivity = async () => {
+		const response = await fetch('/api/dashboard/streamer-activity?days=7');
+		const payload = await readJson(response);
+
+		if (
+			!response.ok ||
+			!payload ||
+			typeof payload !== 'object' ||
+			!(payload as { success?: unknown }).success
+		) {
+			throw new Error(getErrorMessage(payload, 'Failed to fetch streamer activity'));
+		}
+
+		return payload as { streamers: StreamerActivityItem[] };
+	};
+
 	const syncRollingAnalyticsRangeToNow = () => {
 		if (analyticsRangeSelection === 'calendar') return;
 		const durationMs = presetRangeDurationMs[analyticsRangeSelection];
@@ -350,10 +368,15 @@
 	const refreshAllStatus = async (options?: { autoStart?: boolean }) => {
 		const autoStart = options?.autoStart ?? true;
 		const wasPendingLogin = authStatus.pendingLogin;
-		const [nextAuthStatus, nextMinerStatus] = await Promise.all([fetchAuthStatus(), fetchMinerStatus()]);
+		const [nextAuthStatus, nextMinerStatus, nextStreamerActivity] = await Promise.all([
+			fetchAuthStatus(),
+			fetchMinerStatus(),
+			fetchStreamerActivity()
+		]);
 
 		authStatus = nextAuthStatus;
 		minerStatus = nextMinerStatus;
+		streamerActivity = nextStreamerActivity.streamers;
 		await refreshAnalytics();
 
 		if (!nextAuthStatus.authenticated) {
@@ -483,6 +506,7 @@
 		<SummaryCardsSection
 			{minerStatus}
 			summary={analytics?.summary ?? null}
+			{streamerActivity}
 			startDisabled={startMinerDisabled}
 			stopDisabled={stopMinerDisabled}
 			actionPhase={quickActionsActionPhase}

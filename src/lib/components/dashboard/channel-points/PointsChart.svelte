@@ -99,9 +99,13 @@
 
 <div class="space-y-2">
 	{#if chartTimeline.length === 0}
-		<p class="rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-10 text-center text-sm text-muted-foreground">
-			No channel points history in this range.
-		</p>
+		<div class="h-96 w-full">
+			<p
+				class="flex h-full items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground"
+			>
+				No channel points history in this range.
+			</p>
+		</div>
 	{:else}
 		<ChartContainer config={chartConfig} class="h-90 w-full aspect-auto! overflow-hidden!">
 			<AreaChart

@@ -497,7 +497,7 @@
 </script>
 
 <div class="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
-	<main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+	<main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 		<HeaderSection
 			{authStatus}
 			{loadingStartAfterAuth}

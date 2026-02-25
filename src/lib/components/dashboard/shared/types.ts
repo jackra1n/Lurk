@@ -100,8 +100,25 @@ export interface StreamerActivityItem {
 	watchedMinutes: number;
 }
 
+export type ChannelPointsRecentEventKind =
+	| 'points_watch'
+	| 'points_claim'
+	| 'stream_online'
+	| 'stream_offline'
+	| 'other';
+
+export interface ChannelPointsRecentEventItem {
+	id: string;
+	login: string;
+	occurredAtMs: number;
+	kind: ChannelPointsRecentEventKind;
+	reasonCode: string | null;
+	pointsDelta: number | null;
+}
+
 export interface StreamerActivityResponse {
 	success: boolean;
 	days: number;
 	streamers: StreamerActivityItem[];
+	events: ChannelPointsRecentEventItem[];
 }

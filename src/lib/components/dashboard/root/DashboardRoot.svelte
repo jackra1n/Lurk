@@ -9,6 +9,7 @@
 	import SummaryCardsSection from '../summary-cards/SummaryCardsSection.svelte';
 	import type {
 		AuthStatusResponse,
+		ChannelPointsRecentEventItem,
 		ChannelPointsAnalyticsResponse,
 		ChannelPointsControlChange,
 		ChannelPointsControls,
@@ -18,7 +19,8 @@
 		MinerLifecycle,
 		MinerStatusResponse,
 		SortDir,
-		StreamerActivityItem
+		StreamerActivityItem,
+		StreamerActivityResponse
 	} from '../shared/types';
 
 	const themeStorageKey = 'theme';
@@ -73,6 +75,7 @@
 	let loadingMinerAction = $state(false);
 	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
 	let streamerActivity = $state<StreamerActivityItem[]>([]);
+	let recentEvents = $state<ChannelPointsRecentEventItem[]>([]);
 	let analyticsLoading = $state(false);
 	let analyticsErrorMessage = $state<string | null>(null);
 	let analyticsSortBy = $state<ChannelPointsSortBy>('lastWatched');
@@ -312,7 +315,7 @@
 			throw new Error(getErrorMessage(payload, 'Failed to fetch streamer activity'));
 		}
 
-		return payload as { streamers: StreamerActivityItem[] };
+		return payload as StreamerActivityResponse;
 	};
 
 	const syncRollingAnalyticsRangeToNow = () => {
@@ -378,6 +381,7 @@
 		authStatus = nextAuthStatus;
 		minerStatus = nextMinerStatus;
 		streamerActivity = nextStreamerActivity.streamers;
+		recentEvents = nextStreamerActivity.events;
 		await refreshAnalytics();
 
 		if (!nextAuthStatus.authenticated) {
@@ -526,7 +530,7 @@
 			/>
 		</section>
 
-		<ChannelPointsInsightsSection streamers={streamerActivity} />
+		<ChannelPointsInsightsSection streamers={streamerActivity} events={recentEvents} />
 
 	</main>
 

@@ -1,4 +1,4 @@
-import { and, gte, inArray, sql } from 'drizzle-orm';
+import { and, desc, gte, inArray, sql } from 'drizzle-orm';
 import { getStreamers } from '$lib/server/config';
 import { getDatabase } from './client';
 import { channelPointEvents, streamSessions, streamers } from './schema';
@@ -11,7 +11,36 @@ export interface StreamerActivityItem {
 
 export interface StreamerActivityResult {
 	streamers: StreamerActivityItem[];
+	events: ChannelPointsRecentEventItem[];
 }
+
+type ChannelPointsRecentEventKind = 'points_watch' | 'points_claim' | 'stream_online' | 'stream_offline' | 'other';
+
+export interface ChannelPointsRecentEventItem {
+	id: string;
+	login: string;
+	occurredAtMs: number;
+	kind: ChannelPointsRecentEventKind;
+	reasonCode: string | null;
+	pointsDelta: number | null;
+}
+
+const eventTypeFilter = ['points_earned', 'stream_up', 'stream_down'] as const;
+const recentEventLimit = 200;
+
+const classifyPointsEventKind = (reasonCode: string | null): ChannelPointsRecentEventKind => {
+	const normalized = reasonCode?.toUpperCase() ?? '';
+	if (normalized.includes('CLAIM')) return 'points_claim';
+	if (normalized.includes('WATCH')) return 'points_watch';
+	return 'other';
+};
+
+const toRecentEventKind = (eventType: string, reasonCode: string | null): ChannelPointsRecentEventKind => {
+	if (eventType === 'stream_up') return 'stream_online';
+	if (eventType === 'stream_down') return 'stream_offline';
+	if (eventType === 'points_earned') return classifyPointsEventKind(reasonCode);
+	return 'other';
+};
 
 export const getStreamerActivity = (days: number = 7): StreamerActivityResult => {
 	const db = getDatabase();
@@ -20,7 +49,7 @@ export const getStreamerActivity = (days: number = 7): StreamerActivityResult =>
 	const toMs = Date.now();
 
 	if (configuredStreamerNames.length === 0) {
-		return { streamers: [] };
+		return { streamers: [], events: [] };
 	}
 
 	const streamerRows = db
@@ -36,6 +65,11 @@ export const getStreamerActivity = (days: number = 7): StreamerActivityResult =>
 		streamerRows
 			.filter((item): item is { id: number; login: string } => typeof item.login === 'string')
 			.map((item) => [item.login, item])
+	);
+	const loginByStreamerId = new Map(
+		streamerRows
+			.filter((item): item is { id: number; login: string } => typeof item.login === 'string')
+			.map((item) => [item.id, item.login])
 	);
 
 	const streamerIds = streamerRows.map((item) => item.id);
@@ -123,5 +157,48 @@ export const getStreamerActivity = (days: number = 7): StreamerActivityResult =>
 
 	items.sort((a, b) => b.onlineMinutes - a.onlineMinutes);
 
-	return { streamers: items.slice(0, 5) };
+	const recentEventsRows =
+		streamerIds.length > 0
+			? db
+					.select({
+						id: channelPointEvents.id,
+						streamerId: channelPointEvents.streamerId,
+						eventType: channelPointEvents.eventType,
+						reasonCode: channelPointEvents.reasonCode,
+						pointsDelta: channelPointEvents.pointsDelta,
+						occurredAtMs: channelPointEvents.occurredAtMs
+					})
+					.from(channelPointEvents)
+					.where(
+						and(
+							inArray(channelPointEvents.streamerId, streamerIds),
+							gte(channelPointEvents.occurredAtMs, fromMs),
+							inArray(channelPointEvents.eventType, [...eventTypeFilter])
+						)
+					)
+					.orderBy(desc(channelPointEvents.occurredAtMs), desc(channelPointEvents.id))
+					.limit(recentEventLimit)
+					.all()
+			: [];
+
+	const events = recentEventsRows.flatMap((row) => {
+		const login = loginByStreamerId.get(row.streamerId);
+		if (!login) return [];
+
+		const reasonCode = row.reasonCode === null ? null : String(row.reasonCode);
+		const pointsDelta = row.pointsDelta === null ? null : Number(row.pointsDelta);
+
+		return [
+			{
+				id: String(row.id),
+				login,
+				occurredAtMs: Number(row.occurredAtMs),
+				kind: toRecentEventKind(String(row.eventType), reasonCode),
+				reasonCode,
+				pointsDelta
+			} satisfies ChannelPointsRecentEventItem
+		];
+	});
+
+	return { streamers: items.slice(0, 5), events };
 };

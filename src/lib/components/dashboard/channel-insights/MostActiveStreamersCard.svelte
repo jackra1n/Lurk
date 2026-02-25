@@ -63,7 +63,7 @@
 				No streamers with at least {minimumOnlineHours}h online in the last {days} days.
 			</p>
 		{:else}
-			<ChartContainer config={chartConfig} class="h-56">
+			<ChartContainer config={chartConfig} class="h-56 w-full aspect-auto! overflow-hidden!">
 				<BarChart
 					data={chartData}
 					x="login"

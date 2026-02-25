@@ -40,9 +40,9 @@
 	);
 
 	const chartConfig = {
-		watchedBottomHours: { label: 'Watched', color: '#38bdf8' },
-		watchedFullHours: { label: 'Watched', color: '#38bdf8' },
-		watchedHours: { label: 'Watched', color: '#38bdf8' },
+		watchedBottomHours: { label: 'Watched', color: 'var(--primary)' },
+		watchedFullHours: { label: 'Watched', color: 'var(--primary)' },
+		watchedHours: { label: 'Watched', color: 'var(--primary)' },
 		unwatchedHours: { label: 'Online (not watched)', color: '#22c55e' },
 		onlineHours: { label: 'Online', color: '#22c55e' }
 	} satisfies ChartConfig;

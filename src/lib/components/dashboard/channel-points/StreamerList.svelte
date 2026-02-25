@@ -54,7 +54,7 @@
 
 	const streamerDotClass = (streamerState?: StreamerRuntimeState) => {
 		if (!minerRunning) return 'bg-muted-foreground/60';
-		if (streamerState?.isWatched) return 'bg-sky-400';
+		if (streamerState?.isWatched) return 'bg-primary';
 		if (streamerState?.isOnline) return 'bg-emerald-500';
 		return 'bg-red-500';
 	};

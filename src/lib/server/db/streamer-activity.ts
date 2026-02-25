@@ -14,7 +14,14 @@ export interface StreamerActivityResult {
 	events: ChannelPointsRecentEventItem[];
 }
 
-type ChannelPointsRecentEventKind = 'points_watch' | 'points_claim' | 'stream_online' | 'stream_offline' | 'other';
+type ChannelPointsRecentEventKind =
+	| 'points_watch'
+	| 'points_claim'
+	| 'stream_online'
+	| 'stream_offline'
+	| 'watch_started'
+	| 'watch_stopped'
+	| 'other';
 
 export interface ChannelPointsRecentEventItem {
 	id: string;
@@ -25,7 +32,7 @@ export interface ChannelPointsRecentEventItem {
 	pointsDelta: number | null;
 }
 
-const eventTypeFilter = ['points_earned', 'stream_up', 'stream_down'] as const;
+const eventTypeFilter = ['points_earned', 'stream_up', 'stream_down', 'watch_started', 'watch_stopped'] as const;
 const recentEventLimit = 200;
 
 const classifyPointsEventKind = (reasonCode: string | null): ChannelPointsRecentEventKind => {
@@ -38,6 +45,8 @@ const classifyPointsEventKind = (reasonCode: string | null): ChannelPointsRecent
 const toRecentEventKind = (eventType: string, reasonCode: string | null): ChannelPointsRecentEventKind => {
 	if (eventType === 'stream_up') return 'stream_online';
 	if (eventType === 'stream_down') return 'stream_offline';
+	if (eventType === 'watch_started') return 'watch_started';
+	if (eventType === 'watch_stopped') return 'watch_stopped';
 	if (eventType === 'points_earned') return classifyPointsEventKind(reasonCode);
 	return 'other';
 };

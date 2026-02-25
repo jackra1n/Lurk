@@ -105,6 +105,8 @@ export type ChannelPointsRecentEventKind =
 	| 'points_claim'
 	| 'stream_online'
 	| 'stream_offline'
+	| 'watch_started'
+	| 'watch_stopped'
 	| 'other';
 
 export interface ChannelPointsRecentEventItem {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import type { ChannelPointsRecentEventItem } from '../shared/types';
@@ -37,6 +37,8 @@
 		points_claim: 'Earned points from claim bonus',
 		stream_online: 'Streamer went online',
 		stream_offline: 'Streamer went offline',
+		watch_started: 'Started watching',
+		watch_stopped: 'Stopped watching',
 		other: 'Event'
 	} satisfies Record<ChannelPointsRecentEventItem['kind'], string>;
 
@@ -45,6 +47,8 @@
 		points_claim: 'bg-sky-500',
 		stream_online: 'bg-emerald-500',
 		stream_offline: 'bg-rose-500',
+		watch_started: 'bg-cyan-500',
+		watch_stopped: 'bg-slate-500',
 		other: 'bg-muted-foreground/70'
 	} satisfies Record<ChannelPointsRecentEventItem['kind'], string>;
 
@@ -79,12 +83,9 @@
 	});
 </script>
 
-<Card class="bg-card/80">
+<Card class="bg-card/80 block">
 	<CardHeader class="gap-3">
-		<div class="flex items-center justify-between gap-3">
-			<CardTitle class="text-lg">Recent Events</CardTitle>
-		</div>
-		<CardDescription>Points earned and streamer online/offline activity.</CardDescription>
+		<CardTitle class="text-lg">Recent Events</CardTitle>
 	</CardHeader>
 	<CardContent>
 		{#if events.length === 0}
@@ -94,7 +95,7 @@
 				No recent events yet.
 			</p>
 		{:else}
-			<ScrollArea class="h-80" viewportRef={eventsViewport}>
+			<ScrollArea class="h-56" viewportRef={eventsViewport}>
 				<div class="space-y-1 pr-3">
 					{#each visibleEvents as event (event.id)}
 						<div class="rounded-md border border-border/70 bg-background/60 px-3 py-2">

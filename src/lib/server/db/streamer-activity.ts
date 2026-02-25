@@ -121,7 +121,7 @@ export const getStreamerActivity = (days: number = 7): StreamerActivityResult =>
 		};
 	});
 
-	items.sort((a, b) => (b.onlineMinutes + b.watchedMinutes) - (a.onlineMinutes + a.watchedMinutes));
+	items.sort((a, b) => b.onlineMinutes - a.onlineMinutes);
 
 	return { streamers: items.slice(0, 5) };
 };

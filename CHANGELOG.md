@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.2.0](https://github.com/jackra1n/Lurk/compare/1.1.0...1.2.0) (2026-02-26)
+
+
+### Features
+
+* add animated visual indicator for watched streamers ([a2c7646](https://github.com/jackra1n/Lurk/commit/a2c764664eead2217de3b1d73fb9cd198e1ff131))
+* add channel points insights section ([31cd823](https://github.com/jackra1n/Lurk/commit/31cd82394fa82ccab9ef1731d9ac5542911569ae))
+* add channel points status to streamers ([471e925](https://github.com/jackra1n/Lurk/commit/471e9259a887bfc6d15ca046c18ad2545d995bcf))
+* add most active streamers card ([ac603de](https://github.com/jackra1n/Lurk/commit/ac603de82b29c958452d67ae09e46a7ba15dbf63))
+* add recent channel points events section ([b1975b2](https://github.com/jackra1n/Lurk/commit/b1975b2ed868d4e07b5686e05986b650a76ac21e))
+* add streamer activity api ([abcd7d4](https://github.com/jackra1n/Lurk/commit/abcd7d43c3723999a60f512be0b6f1090128a1f3))
+* add watch start/stop events ([2581ac6](https://github.com/jackra1n/Lurk/commit/2581ac67c031500bd66c736df2ae0504568ad7a5))
+* adjust bar chart rounding for watched time ([6b13d27](https://github.com/jackra1n/Lurk/commit/6b13d27b2317fd2871846fb573d565682e6a5de3))
+* adjust chart padding dynamically ([375b609](https://github.com/jackra1n/Lurk/commit/375b6092714a8ccb60463fae77b6329276bad70c))
+* chart make preset ranges roll with current time ([4084e4f](https://github.com/jackra1n/Lurk/commit/4084e4fb48c4dc389ae5445110ce9ada0bb3d145))
+* handle streamers with disabled channel points ([333eb4a](https://github.com/jackra1n/Lurk/commit/333eb4a8a4831a6f7edc6ef058676a933fb801c1))
+* handle streamers with disabled channel points ([d51c40b](https://github.com/jackra1n/Lurk/commit/d51c40b0613aa60c1e7258be4526f5591cc94f73))
+* improve most active streamers card ([acc2f25](https://github.com/jackra1n/Lurk/commit/acc2f252593931dbffe4115cbc87033e23be4067))
+* improve x-axis tick readability in some cases ([d76f884](https://github.com/jackra1n/Lurk/commit/d76f8846c18977a6b068817353eb06446db55621))
+* show indicator for disabled channel points streamers ([5463bcc](https://github.com/jackra1n/Lurk/commit/5463bcc37c2143b785104816f6cb0361113c7f80))
+
+
+### Bug Fixes
+
+* ensure chart displays single data points ([46cc892](https://github.com/jackra1n/Lurk/commit/46cc89269d279467bcc3ab583f475427d1ea95d3))
+* improve chart container layout ([5340b4e](https://github.com/jackra1n/Lurk/commit/5340b4e7286402a6dbfdffb7b85e029f93ded2aa))
+
+
+### Refactoring
+
+* improve chart and event card visuals ([2922085](https://github.com/jackra1n/Lurk/commit/29220855c805253eacc8013e7aff6c3f0c32f15c))
+* move channel insights components ([e5f3e0a](https://github.com/jackra1n/Lurk/commit/e5f3e0adc0975d0d9a7dc6f8f33bae41fc0424bb))
+* simplify event dot styling ([efee1a6](https://github.com/jackra1n/Lurk/commit/efee1a6e29b86d3e6fd79dfbd787838816028d3e))
+* update dashboard card layouts and styling ([f18a3d7](https://github.com/jackra1n/Lurk/commit/f18a3d73f30ed8a12783b75d9a2cd170e4b5ff61))
+
+
+### Documentation
+
+* add channel points status to schema ([bcadda7](https://github.com/jackra1n/Lurk/commit/bcadda7117718a064d847c08e814b2a646de371e))
+
+
+### Styles
+
+* center empty chart message ([cc32865](https://github.com/jackra1n/Lurk/commit/cc32865bf276e6076d71f0dabf70828a2c993d4b))
+* improve channel points layout and text ([16bd92a](https://github.com/jackra1n/Lurk/commit/16bd92a453abdc6e8d5bd8997c031915215a6aed))
+* reduce dashboard root vertical padding ([c4d62a5](https://github.com/jackra1n/Lurk/commit/c4d62a5e4fb3b3906c8695ae3b3a1f61ce3b3a11))
+* shorten channel points label ([6bd0884](https://github.com/jackra1n/Lurk/commit/6bd0884ba66551bc5bca8988a2e69de1f7571821))
+* tweak primary color variables ([26d9840](https://github.com/jackra1n/Lurk/commit/26d9840251adf7d03d607140889243b747b9da32))
+* use primary theme color ([aa66bdf](https://github.com/jackra1n/Lurk/commit/aa66bdfe28935a75bda13e4c7caf1d4cca24e4e6))
+
 ## [1.1.0](https://github.com/jackra1n/Lurk/compare/1.0.3...1.1.0) (2026-02-15)
 
 

@@ -59,19 +59,17 @@
 	} satisfies Record<EventKind, string>;
 
 	const eventDotClassByKind = {
-		points_watch: '',
-		points_claim: '',
+		points_watch: 'bg-primary',
+		points_claim: 'bg-primary',
 		stream_online: 'bg-emerald-500',
 		stream_offline: 'bg-muted-foreground/60',
-		watch_started: '',
+		watch_started: 'bg-primary',
 		watch_stopped: 'bg-red-500',
 		other: 'bg-muted-foreground/70'
 	} satisfies Record<EventKind, string>;
 
 	const getEventLabel = (kind: EventKind) => eventLabelByKind[kind];
 	const getEventDotClass = (kind: EventKind) => eventDotClassByKind[kind];
-	const usesPointsTone = (kind: EventKind) =>
-		kind === 'points_watch' || kind === 'points_claim' || kind === 'watch_started';
 
 	const visibleEvents = $derived(events.slice(0, visibleEventsCount));
 
@@ -125,9 +123,6 @@
 									<div class="flex items-center gap-2">
 										<span
 											class={`inline-flex size-2 shrink-0 rounded-full ${getEventDotClass(event.kind)}`}
-											style={usesPointsTone(event.kind)
-												? 'background-color: color-mix(in oklch, var(--primary) 72%, var(--background));'
-												: undefined}
 										></span>
 										<p class="truncate text-sm font-medium">{event.login}</p>
 									</div>

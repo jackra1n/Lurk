@@ -100,6 +100,18 @@ const jitterDelay = (delayMs: number) => {
 const summarizeGqlErrors = (errors: GqlError[]) =>
 	[...new Set(errors.map((error) => error.message))].slice(0, 4);
 
+// playlists can end with tags like #EXT-X-TWITCH-PREFETCH or #EXT-X-ENDLIST
+export const lastUrlLine = (playlist: string): string | null => {
+	const lines = playlist.split('\n');
+	for (let i = lines.length - 1; i >= 0; i--) {
+		const line = lines[i].trim();
+		if (line.length > 0 && !line.startsWith('#')) {
+			return line;
+		}
+	}
+	return null;
+};
+
 function classifyGqlErrors(errors: GqlError[]): GqlErrorSummary {
 	const messages = summarizeGqlErrors(errors);
 	const normalized = messages.map(normalizeErrorMessage);
@@ -665,9 +677,8 @@ export class TwitchClient {
 			}
 			const masterPlaylist = await response.text();
 
-			const lines = masterPlaylist.split('\n').filter((l) => l.trim().length > 0);
-			const lowestQualityUrl = lines[lines.length - 1];
-			if (!lowestQualityUrl || lowestQualityUrl.startsWith('#')) {
+			const lowestQualityUrl = lastUrlLine(masterPlaylist);
+			if (!lowestQualityUrl) {
 				logger.debug({ login }, 'No stream URL found in master manifest');
 				return null;
 			}
@@ -691,9 +702,8 @@ export class TwitchClient {
 			}
 			const playlist = await playlistResponse.text();
 
-			const lines = playlist.split('\n').filter((l) => l.trim().length > 0);
-			const segmentUrl = lines[lines.length - 1];
-			if (!segmentUrl || segmentUrl.startsWith('#')) {
+			const segmentUrl = lastUrlLine(playlist);
+			if (!segmentUrl) {
 				logger.debug({ login }, 'No stream segment URL found in variant playlist');
 				return false;
 			}

@@ -11,6 +11,7 @@ import { AsyncRateLimiter, RateLimiterQueueFullError } from './rate-limiter';
 
 const VERSION_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const SPADE_URL_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const SPADE_URL_RETRY_INTERVAL_MS = 60 * 1000;
 const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
 const GQL_RATE_LIMIT_RPS = 5;
 const GQL_RATE_LIMIT_BURST = GQL_RATE_LIMIT_RPS;
@@ -151,6 +152,7 @@ export class TwitchClient {
 	private lastVersionFetch = 0;
 	private spadeUrl: string | null = null;
 	private lastSpadeUrlFetch = 0;
+	private lastSpadeUrlAttempt = 0;
 	private gqlLimiter = new AsyncRateLimiter({
 		ratePerSecond: GQL_RATE_LIMIT_RPS,
 		burst: GQL_RATE_LIMIT_BURST,
@@ -554,9 +556,11 @@ export class TwitchClient {
 	// spade_url lives in Twitch's global settings JS -- same value for every channel
 	async getSpadeUrl(): Promise<string | null> {
 		const now = Date.now();
-		if (this.spadeUrl && now - this.lastSpadeUrlFetch < SPADE_URL_REFRESH_INTERVAL_MS) {
+		const fresh = this.spadeUrl !== null && now - this.lastSpadeUrlFetch < SPADE_URL_REFRESH_INTERVAL_MS;
+		if (fresh || now - this.lastSpadeUrlAttempt < SPADE_URL_RETRY_INTERVAL_MS) {
 			return this.spadeUrl;
 		}
+		this.lastSpadeUrlAttempt = now;
 
 		try {
 			const headers = { 'User-Agent': USER_AGENT };

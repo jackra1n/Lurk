@@ -321,9 +321,9 @@ class MinerService {
 	}
 
 	/**
-	 * core minute-watched loop body. Called every ~20 seconds.
-	 * for each selected streamer: fetch playback token, resolve HLS stream URL,
-	 * HEAD-verify it, then POST a minute-watched event to the spade endpoint.
+	 * core watch loop body, called every ~20 seconds. For each due streamer:
+	 * touch the newest HLS segment (playlist URL cached per broadcast) to
+	 * simulate watching, then POST a minute-watched event to the spade endpoint.
 	 */
 	private async sendMinuteWatchedForStreamers(): Promise<void> {
 		if (!this.userId) return;
@@ -355,19 +355,31 @@ class MinerService {
 			if (!streamerState.channelId || !streamerState.stream.broadcastId || !streamerState.stream.spadeUrl) continue;
 
 			try {
-				const token = await twitchClient.getPlaybackAccessToken(streamerState.name);
-				if (!token) {
-					logger.debug({ streamer: streamerState.name }, 'Could not get playback token, skipping minute-watched');
-					continue;
+				if (!streamerState.stream.hlsPlaylistUrl) {
+					const token = await twitchClient.getPlaybackAccessToken(streamerState.name);
+					if (!token) {
+						logger.debug({ streamer: streamerState.name }, 'Could not get playback token, skipping minute-watched');
+						continue;
+					}
+
+					streamerState.stream.hlsPlaylistUrl = await twitchClient.fetchLowestQualityPlaylistUrl(
+						streamerState.name,
+						token.signature,
+						token.value
+					);
+					if (!streamerState.stream.hlsPlaylistUrl) {
+						logger.debug({ streamer: streamerState.name }, 'Could not resolve playlist URL, skipping minute-watched');
+						continue;
+					}
 				}
 
-				const streamUrl = await twitchClient.fetchLowestQualityStreamUrl(
+				const watching = await twitchClient.touchStreamSegment(
 					streamerState.name,
-					token.signature,
-					token.value
+					streamerState.stream.hlsPlaylistUrl
 				);
-				if (!streamUrl) {
-					logger.debug({ streamer: streamerState.name }, 'Could not resolve stream URL, skipping minute-watched');
+				if (!watching) {
+					streamerState.stream.hlsPlaylistUrl = null;
+					logger.debug({ streamer: streamerState.name }, 'Stream segment check failed, will refresh playlist URL');
 					continue;
 				}
 

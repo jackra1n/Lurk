@@ -631,60 +631,71 @@ export class TwitchClient {
 		return { signature: token.signature, value: token.value };
 	}
 
-	// fetch the HLS master manifest for a channel, then resolve the lowest quality stream URL
-	async fetchLowestQualityStreamUrl(
+	// resolve the lowest quality variant playlist URL from the HLS master manifest;
+	// stable for the lifetime of a broadcast, so callers should cache it
+	async fetchLowestQualityPlaylistUrl(
 		login: string,
 		signature: string,
 		value: string
 	): Promise<string | null> {
 		try {
-			const headers = { 'User-Agent': USER_AGENT };
 			const masterUrl =
 				`https://usher.ttvnw.net/api/channel/hls/${login.toLowerCase()}.m3u8` +
 				`?sig=${signature}&token=${encodeURIComponent(value)}`;
 
-			const masterResponse = await fetch(masterUrl, { headers, redirect: 'follow' });
-			if (!masterResponse.ok) {
-				logger.debug({ login, status: masterResponse.status }, 'Failed to fetch HLS master manifest');
+			const response = await fetch(masterUrl, {
+				headers: { 'User-Agent': USER_AGENT },
+				redirect: 'follow'
+			});
+			if (!response.ok) {
+				logger.debug({ login, status: response.status }, 'Failed to fetch HLS master manifest');
 				return null;
 			}
-			const masterPlaylist = await masterResponse.text();
+			const masterPlaylist = await response.text();
 
-			// last non-empty line in the master playlist is the lowest quality variant URL
-			const masterLines = masterPlaylist.split('\n').filter((l) => l.trim().length > 0);
-			const lowestQualityUrl = masterLines[masterLines.length - 1];
+			const lines = masterPlaylist.split('\n').filter((l) => l.trim().length > 0);
+			const lowestQualityUrl = lines[lines.length - 1];
 			if (!lowestQualityUrl || lowestQualityUrl.startsWith('#')) {
 				logger.debug({ login }, 'No stream URL found in master manifest');
 				return null;
 			}
 
-			// fetch the variant playlist to get an actual stream segment URL
-			const variantResponse = await fetch(lowestQualityUrl, { headers, redirect: 'follow' });
-			if (!variantResponse.ok) {
-				logger.debug({ login, status: variantResponse.status }, 'Failed to fetch variant playlist');
-				return null;
-			}
-			const variantPlaylist = await variantResponse.text();
+			return lowestQualityUrl;
+		} catch (error) {
+			logger.error({ err: error, login }, 'Error fetching lowest quality playlist URL');
+			return null;
+		}
+	}
 
-			// second-to-last non-empty line is the segment URL
-			const variantLines = variantPlaylist.split('\n').filter((l) => l.trim().length > 0);
-			const streamSegmentUrl = variantLines[variantLines.length - 1];
-			if (!streamSegmentUrl || streamSegmentUrl.startsWith('#')) {
+	// fetch the variant playlist and HEAD its newest segment to simulate watching
+	async touchStreamSegment(login: string, playlistUrl: string): Promise<boolean> {
+		try {
+			const headers = { 'User-Agent': USER_AGENT };
+
+			const playlistResponse = await fetch(playlistUrl, { headers, redirect: 'follow' });
+			if (!playlistResponse.ok) {
+				logger.debug({ login, status: playlistResponse.status }, 'Failed to fetch variant playlist');
+				return false;
+			}
+			const playlist = await playlistResponse.text();
+
+			const lines = playlist.split('\n').filter((l) => l.trim().length > 0);
+			const segmentUrl = lines[lines.length - 1];
+			if (!segmentUrl || segmentUrl.startsWith('#')) {
 				logger.debug({ login }, 'No stream segment URL found in variant playlist');
-				return null;
+				return false;
 			}
 
-			// verify segment URL is reachable
-			const headResponse = await fetch(streamSegmentUrl, { method: 'HEAD', headers, redirect: 'follow' });
+			const headResponse = await fetch(segmentUrl, { method: 'HEAD', headers, redirect: 'follow' });
 			if (!headResponse.ok) {
 				logger.debug({ login, status: headResponse.status }, 'Stream segment URL HEAD check failed');
-				return null;
+				return false;
 			}
 
-			return streamSegmentUrl;
+			return true;
 		} catch (error) {
-			logger.error({ err: error, login }, 'Error fetching lowest quality stream URL');
-			return null;
+			logger.error({ err: error, login }, 'Error touching stream segment');
+			return false;
 		}
 	}
 

@@ -22,7 +22,7 @@ const logger = getLogger('Miner');
 
 class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
-	private minuteWatcherInterval: ReturnType<typeof setInterval> | null = null;
+	private watchLoopTimeout: ReturnType<typeof setTimeout> | null = null;
 	private starting = false;
 	private running = false;
 	private startedAt: Date | null = null;
@@ -54,9 +54,9 @@ class MinerService {
 			clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (this.minuteWatcherInterval) {
-			clearInterval(this.minuteWatcherInterval);
-			this.minuteWatcherInterval = null;
+		if (this.watchLoopTimeout) {
+			clearTimeout(this.watchLoopTimeout);
+			this.watchLoopTimeout = null;
 		}
 
 		this.persistWatchTransitions([]);
@@ -255,11 +255,7 @@ class MinerService {
 			}, this.TICK_INTERVAL);
 
 			logger.info('Starting minute-watched loop...');
-			this.minuteWatcherInterval = setInterval(() => {
-				this.sendMinuteWatchedForStreamers().catch((err) => {
-					logger.error({ err }, 'Minute-watched loop error');
-				});
-			}, this.WATCH_LOOP_INTERVAL);
+			this.scheduleWatchLoop();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to finish miner startup');
 			this.cleanupFailedStart();
@@ -289,9 +285,9 @@ class MinerService {
 			clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (this.minuteWatcherInterval) {
-			clearInterval(this.minuteWatcherInterval);
-			this.minuteWatcherInterval = null;
+		if (this.watchLoopTimeout) {
+			clearTimeout(this.watchLoopTimeout);
+			this.watchLoopTimeout = null;
 		}
 
 		this.persistWatchTransitions([]);
@@ -305,6 +301,19 @@ class MinerService {
 		this.startedAt = null;
 		this.userId = null;
 		logger.info('Stopped');
+	}
+
+	private scheduleWatchLoop(): void {
+		this.watchLoopTimeout = setTimeout(async () => {
+			try {
+				await this.sendMinuteWatchedForStreamers();
+			} catch (err) {
+				logger.error({ err }, 'Minute-watched loop error');
+			}
+			if (this.running) {
+				this.scheduleWatchLoop();
+			}
+		}, this.WATCH_LOOP_INTERVAL);
 	}
 
 	private async tick(): Promise<void> {

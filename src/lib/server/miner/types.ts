@@ -5,7 +5,6 @@ export interface StreamData {
 	title: string | null;
 	game: string | null;
 	viewers: number;
-	spadeUrl: string | null;
 	hlsPlaylistUrl: string | null;
 	streamUpAt: number; // PubSub stream-up timestamp, 0 = unset
 	onlineAt: number; // confirmed online, used for 30-second grace period
@@ -20,7 +19,6 @@ export function createDefaultStreamData(): StreamData {
 		title: null,
 		game: null,
 		viewers: 0,
-		spadeUrl: null,
 		hlsPlaylistUrl: null,
 		streamUpAt: 0,
 		onlineAt: 0,

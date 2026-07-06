@@ -10,6 +10,7 @@ import { getLogger } from '../logger';
 import { AsyncRateLimiter, RateLimiterQueueFullError } from './rate-limiter';
 
 const VERSION_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const SPADE_URL_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
 const GQL_RATE_LIMIT_RPS = 5;
 const GQL_RATE_LIMIT_BURST = GQL_RATE_LIMIT_RPS;
@@ -148,6 +149,8 @@ export class TwitchClient {
 	private clientSessionId = randomBytes(16).toString('hex');
 	private clientVersion = CLIENT_VERSION_FALLBACK;
 	private lastVersionFetch = 0;
+	private spadeUrl: string | null = null;
+	private lastSpadeUrlFetch = 0;
 	private gqlLimiter = new AsyncRateLimiter({
 		ratePerSecond: GQL_RATE_LIMIT_RPS,
 		burst: GQL_RATE_LIMIT_BURST,
@@ -548,17 +551,20 @@ export class TwitchClient {
 		return { ok: true };
 	}
 
-	async getSpadeUrl(channelLogin: string): Promise<string | null> {
+	// spade_url lives in Twitch's global settings JS -- same value for every channel
+	async getSpadeUrl(): Promise<string | null> {
+		const now = Date.now();
+		if (this.spadeUrl && now - this.lastSpadeUrlFetch < SPADE_URL_REFRESH_INTERVAL_MS) {
+			return this.spadeUrl;
+		}
+
 		try {
 			const headers = { 'User-Agent': USER_AGENT };
 
-			const pageResponse = await fetch(`https://www.twitch.tv/${channelLogin.toLowerCase()}`, {
-				headers,
-				redirect: 'follow'
-			});
+			const pageResponse = await fetch('https://www.twitch.tv', { headers, redirect: 'follow' });
 			if (!pageResponse.ok) {
-				logger.error({ channelLogin, status: pageResponse.status }, 'Failed to fetch channel page for spade URL');
-				return null;
+				logger.error({ status: pageResponse.status }, 'Failed to fetch twitch.tv for spade URL');
+				return this.spadeUrl;
 			}
 			const pageHtml = await pageResponse.text();
 
@@ -566,28 +572,30 @@ export class TwitchClient {
 				/(https:\/\/static\.twitchcdn\.net\/config\/settings.*?js|https:\/\/assets\.twitch\.tv\/config\/settings.*?\.js)/
 			);
 			if (!settingsMatch) {
-				logger.error({ channelLogin }, 'Could not find settings JS URL in channel page');
-				return null;
+				logger.error('Could not find settings JS URL in twitch.tv page');
+				return this.spadeUrl;
 			}
 
 			const settingsResponse = await fetch(settingsMatch[1], { headers });
 			if (!settingsResponse.ok) {
-				logger.error({ channelLogin, status: settingsResponse.status }, 'Failed to fetch settings JS');
-				return null;
+				logger.error({ status: settingsResponse.status }, 'Failed to fetch settings JS');
+				return this.spadeUrl;
 			}
 			const settingsJs = await settingsResponse.text();
 
 			const spadeMatch = settingsJs.match(/"spade_url":"(.*?)"/);
 			if (!spadeMatch) {
-				logger.error({ channelLogin }, 'Could not find spade_url in settings JS');
-				return null;
+				logger.error('Could not find spade_url in settings JS');
+				return this.spadeUrl;
 			}
 
-			logger.debug({ channelLogin, spadeUrl: spadeMatch[1] }, 'Got spade URL');
-			return spadeMatch[1];
+			this.spadeUrl = spadeMatch[1];
+			this.lastSpadeUrlFetch = now;
+			logger.debug({ spadeUrl: this.spadeUrl }, 'Got spade URL');
+			return this.spadeUrl;
 		} catch (error) {
-			logger.error({ err: error, channelLogin }, 'Error fetching spade URL');
-			return null;
+			logger.error({ err: error }, 'Error fetching spade URL');
+			return this.spadeUrl;
 		}
 	}
 

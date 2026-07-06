@@ -357,11 +357,17 @@ class MinerService {
 		);
 		if (dueStreamers.length === 0) return;
 
+		const spadeUrl = await twitchClient.getSpadeUrl();
+		if (!spadeUrl) {
+			logger.warn('No spade URL available, skipping minute-watched round');
+			return;
+		}
+
 		const delayBetween = this.WATCH_LOOP_INTERVAL / dueStreamers.length;
 
 		for (let i = 0; i < dueStreamers.length; i++) {
 			const streamerState = dueStreamers[i];
-			if (!streamerState.channelId || !streamerState.stream.broadcastId || !streamerState.stream.spadeUrl) continue;
+			if (!streamerState.channelId || !streamerState.stream.broadcastId) continue;
 
 			try {
 				if (!streamerState.stream.hlsPlaylistUrl) {
@@ -399,7 +405,7 @@ class MinerService {
 					streamerState.name
 				);
 
-				const success = await twitchClient.sendMinuteWatchedEvent(streamerState.stream.spadeUrl, payload);
+				const success = await twitchClient.sendMinuteWatchedEvent(spadeUrl, payload);
 				if (success) {
 					const sentAt = Date.now();
 					if (streamerState.stream.minuteWatchedTimestamp > 0) {

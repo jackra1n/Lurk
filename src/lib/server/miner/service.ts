@@ -34,7 +34,8 @@ class MinerService {
 	private lastStartResult: MinerStartResult | null = null;
 
 	private readonly TICK_INTERVAL = 30 * 60_000; // 30 minutes -- PubSub handles real-time events
-	private readonly MINUTE_WATCHED_INTERVAL = 20_000; // 20 seconds
+	private readonly WATCH_LOOP_INTERVAL = 20_000;
+	private readonly MINUTE_WATCHED_INTERVAL = 59_000;
 	private readonly MAX_WATCHED_STREAMERS = 2;
 
 	// message deduplication
@@ -258,7 +259,7 @@ class MinerService {
 				this.sendMinuteWatchedForStreamers().catch((err) => {
 					logger.error({ err }, 'Minute-watched loop error');
 				});
-			}, this.MINUTE_WATCHED_INTERVAL);
+			}, this.WATCH_LOOP_INTERVAL);
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to finish miner startup');
 			this.cleanupFailedStart();
@@ -340,12 +341,17 @@ class MinerService {
 
 		const selectedStreamers = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
 		this.persistWatchTransitions(selectedStreamers);
-		if (selectedStreamers.length === 0) return;
 
-		const delayBetween = this.MINUTE_WATCHED_INTERVAL / selectedStreamers.length;
+		// real players emit minute-watched roughly once per minute per stream
+		const dueStreamers = selectedStreamers.filter(
+			(state) => now - state.stream.minuteWatchedTimestamp >= this.MINUTE_WATCHED_INTERVAL
+		);
+		if (dueStreamers.length === 0) return;
 
-		for (let i = 0; i < selectedStreamers.length; i++) {
-			const streamerState = selectedStreamers[i];
+		const delayBetween = this.WATCH_LOOP_INTERVAL / dueStreamers.length;
+
+		for (let i = 0; i < dueStreamers.length; i++) {
+			const streamerState = dueStreamers[i];
 			if (!streamerState.channelId || !streamerState.stream.broadcastId || !streamerState.stream.spadeUrl) continue;
 
 			try {
@@ -374,10 +380,11 @@ class MinerService {
 
 				const success = await twitchClient.sendMinuteWatchedEvent(streamerState.stream.spadeUrl, payload);
 				if (success) {
+					const sentAt = Date.now();
 					if (streamerState.stream.minuteWatchedTimestamp > 0) {
-						streamerState.stream.minuteWatched += (now - streamerState.stream.minuteWatchedTimestamp) / 60_000;
+						streamerState.stream.minuteWatched += (sentAt - streamerState.stream.minuteWatchedTimestamp) / 60_000;
 					}
-					streamerState.stream.minuteWatchedTimestamp = now;
+					streamerState.stream.minuteWatchedTimestamp = sentAt;
 					logger.debug(
 						{ streamer: streamerState.name, minuteWatched: streamerState.stream.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'
@@ -405,7 +412,7 @@ class MinerService {
 			}
 
 			// space out requests between streamers (skip delay after last one)
-			if (i < selectedStreamers.length - 1) {
+			if (i < dueStreamers.length - 1) {
 				await new Promise((resolve) => setTimeout(resolve, delayBetween));
 			}
 		}

@@ -12,6 +12,12 @@ import { AsyncRateLimiter, RateLimiterQueueFullError } from './rate-limiter';
 const VERSION_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const SPADE_URL_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const SPADE_URL_RETRY_INTERVAL_MS = 60 * 1000;
+const FETCH_TIMEOUT_MS = 10_000;
+
+// every outbound fetch gets a hard deadline so a wedged socket cannot stall a caller
+const fetchTimeout = (): AbortSignal => AbortSignal.timeout(FETCH_TIMEOUT_MS);
+
+
 const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
 const GQL_RATE_LIMIT_RPS = 5;
 const GQL_RATE_LIMIT_BURST = GQL_RATE_LIMIT_RPS;
@@ -205,7 +211,8 @@ export class TwitchClient {
 
 		try {
 			const response = await fetch('https://www.twitch.tv', {
-				headers: { 'User-Agent': USER_AGENT }
+				headers: { 'User-Agent': USER_AGENT },
+				signal: fetchTimeout()
 			});
 
 			if (!response.ok) {
@@ -577,7 +584,11 @@ export class TwitchClient {
 		try {
 			const headers = { 'User-Agent': USER_AGENT };
 
-			const pageResponse = await fetch('https://www.twitch.tv', { headers, redirect: 'follow' });
+			const pageResponse = await fetch('https://www.twitch.tv', {
+				headers,
+				redirect: 'follow',
+				signal: fetchTimeout()
+			});
 			if (!pageResponse.ok) {
 				logger.error({ status: pageResponse.status }, 'Failed to fetch twitch.tv for spade URL');
 				return this.spadeUrl;
@@ -592,7 +603,7 @@ export class TwitchClient {
 				return this.spadeUrl;
 			}
 
-			const settingsResponse = await fetch(settingsMatch[1], { headers });
+			const settingsResponse = await fetch(settingsMatch[1], { headers, signal: fetchTimeout() });
 			if (!settingsResponse.ok) {
 				logger.error({ status: settingsResponse.status }, 'Failed to fetch settings JS');
 				return this.spadeUrl;
@@ -669,7 +680,8 @@ export class TwitchClient {
 
 			const response = await fetch(masterUrl, {
 				headers: { 'User-Agent': USER_AGENT },
-				redirect: 'follow'
+				redirect: 'follow',
+				signal: fetchTimeout()
 			});
 			if (!response.ok) {
 				logger.debug({ login, status: response.status }, 'Failed to fetch HLS master manifest');
@@ -695,7 +707,11 @@ export class TwitchClient {
 		try {
 			const headers = { 'User-Agent': USER_AGENT };
 
-			const playlistResponse = await fetch(playlistUrl, { headers, redirect: 'follow' });
+			const playlistResponse = await fetch(playlistUrl, {
+				headers,
+				redirect: 'follow',
+				signal: fetchTimeout()
+			});
 			if (!playlistResponse.ok) {
 				logger.debug({ login, status: playlistResponse.status }, 'Failed to fetch variant playlist');
 				return false;
@@ -708,7 +724,12 @@ export class TwitchClient {
 				return false;
 			}
 
-			const headResponse = await fetch(segmentUrl, { method: 'HEAD', headers, redirect: 'follow' });
+			const headResponse = await fetch(segmentUrl, {
+				method: 'HEAD',
+				headers,
+				redirect: 'follow',
+				signal: fetchTimeout()
+			});
 			if (!headResponse.ok) {
 				logger.debug({ login, status: headResponse.status }, 'Stream segment URL HEAD check failed');
 				return false;
@@ -729,7 +750,8 @@ export class TwitchClient {
 					'User-Agent': USER_AGENT,
 					'Content-Type': 'application/x-www-form-urlencoded'
 				},
-				body: new URLSearchParams({ data: encodedPayload })
+				body: new URLSearchParams({ data: encodedPayload }),
+				signal: fetchTimeout()
 			});
 
 			return response.status === 204;

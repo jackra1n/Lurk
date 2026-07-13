@@ -409,3 +409,12 @@ export function selectStreamersToWatch(
 
 	return eligible.slice(0, maxWatched);
 }
+
+// real players emit minute-watched roughly once per minute per stream
+export function selectDueStreamers(
+	selected: StreamerState[],
+	now: number,
+	minuteWatchedIntervalMs: number
+): StreamerState[] {
+	return selected.filter((state) => now - state.stream.minuteWatchedTimestamp >= minuteWatchedIntervalMs);
+}

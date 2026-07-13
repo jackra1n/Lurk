@@ -17,6 +17,19 @@ const FETCH_TIMEOUT_MS = 10_000;
 // every outbound fetch gets a hard deadline so a wedged socket cannot stall a caller
 const fetchTimeout = (): AbortSignal => AbortSignal.timeout(FETCH_TIMEOUT_MS);
 
+export interface SpadeUrlCache {
+	spadeUrl: string | null;
+	lastSpadeUrlFetch: number;
+	lastSpadeUrlAttempt: number;
+}
+
+// decide whether a cached spade URL can be reused or a scrape is needed;
+// failures back off via lastSpadeUrlAttempt so callers do not hammer twitch.tv
+export const shouldRefetchSpadeUrl = (cache: SpadeUrlCache, now: number): boolean => {
+	const fresh = cache.spadeUrl !== null && now - cache.lastSpadeUrlFetch < SPADE_URL_REFRESH_INTERVAL_MS;
+	if (fresh) return false;
+	return now - cache.lastSpadeUrlAttempt >= SPADE_URL_RETRY_INTERVAL_MS;
+};
 
 const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
 const GQL_RATE_LIMIT_RPS = 5;
@@ -168,9 +181,9 @@ export class TwitchClient {
 	private clientSessionId = randomBytes(16).toString('hex');
 	private clientVersion = CLIENT_VERSION_FALLBACK;
 	private lastVersionFetch = 0;
-	private spadeUrl: string | null = null;
-	private lastSpadeUrlFetch = 0;
-	private lastSpadeUrlAttempt = 0;
+	spadeUrl: string | null = null;
+	lastSpadeUrlFetch = 0;
+	lastSpadeUrlAttempt = 0;
 	private gqlLimiter = new AsyncRateLimiter({
 		ratePerSecond: GQL_RATE_LIMIT_RPS,
 		burst: GQL_RATE_LIMIT_BURST,
@@ -575,8 +588,7 @@ export class TwitchClient {
 	// spade_url lives in Twitch's global settings JS -- same value for every channel
 	async getSpadeUrl(): Promise<string | null> {
 		const now = Date.now();
-		const fresh = this.spadeUrl !== null && now - this.lastSpadeUrlFetch < SPADE_URL_REFRESH_INTERVAL_MS;
-		if (fresh || now - this.lastSpadeUrlAttempt < SPADE_URL_RETRY_INTERVAL_MS) {
+		if (!shouldRefetchSpadeUrl(this, now)) {
 			return this.spadeUrl;
 		}
 		this.lastSpadeUrlAttempt = now;

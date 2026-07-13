@@ -13,6 +13,7 @@ import {
 	subscribeToStreamer,
 	checkStreamerOnline,
 	selectStreamersToWatch,
+	selectDueStreamers,
 	processStreamer,
 	claimBonus,
 	withEventStore
@@ -351,10 +352,7 @@ class MinerService {
 		const selectedStreamers = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
 		this.persistWatchTransitions(selectedStreamers);
 
-		// real players emit minute-watched roughly once per minute per stream
-		const dueStreamers = selectedStreamers.filter(
-			(state) => now - state.stream.minuteWatchedTimestamp >= this.MINUTE_WATCHED_INTERVAL
-		);
+		const dueStreamers = selectDueStreamers(selectedStreamers, now, this.MINUTE_WATCHED_INTERVAL);
 		if (dueStreamers.length === 0) return;
 
 		const spadeUrl = await twitchClient.getSpadeUrl();

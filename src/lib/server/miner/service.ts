@@ -21,9 +21,10 @@ import {
 
 const logger = getLogger('Miner');
 
-class MinerService {
+export class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
 	private watchLoopTimeout: ReturnType<typeof setTimeout> | null = null;
+	private watchLoopGeneration = 0;
 	private starting = false;
 	private running = false;
 	private startedAt: Date | null = null;
@@ -55,10 +56,7 @@ class MinerService {
 			clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (this.watchLoopTimeout) {
-			clearTimeout(this.watchLoopTimeout);
-			this.watchLoopTimeout = null;
-		}
+		this.invalidateWatchLoop();
 
 		this.persistWatchTransitions([]);
 		twitchPubSubPool.disconnect();
@@ -256,7 +254,7 @@ class MinerService {
 			}, this.TICK_INTERVAL);
 
 			logger.info('Starting minute-watched loop...');
-			this.scheduleWatchLoop();
+			this.startWatchLoop();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to finish miner startup');
 			this.cleanupFailedStart();
@@ -286,10 +284,7 @@ class MinerService {
 			clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (this.watchLoopTimeout) {
-			clearTimeout(this.watchLoopTimeout);
-			this.watchLoopTimeout = null;
-		}
+		this.invalidateWatchLoop();
 
 		this.persistWatchTransitions([]);
 		twitchPubSubPool.disconnect();
@@ -304,15 +299,32 @@ class MinerService {
 		logger.info('Stopped');
 	}
 
-	private scheduleWatchLoop(): void {
+	private invalidateWatchLoop(): void {
+		this.watchLoopGeneration++;
+		if (this.watchLoopTimeout) {
+			clearTimeout(this.watchLoopTimeout);
+			this.watchLoopTimeout = null;
+		}
+	}
+
+	private startWatchLoop(): void {
+		const generation = ++this.watchLoopGeneration;
+		this.scheduleWatchLoop(generation);
+	}
+
+	private scheduleWatchLoop(generation: number): void {
 		this.watchLoopTimeout = setTimeout(async () => {
+			if (generation !== this.watchLoopGeneration) return;
+			this.watchLoopTimeout = null;
+			if (!this.running) return;
+
 			try {
 				await this.sendMinuteWatchedForStreamers();
 			} catch (err) {
 				logger.error({ err }, 'Minute-watched loop error');
 			}
-			if (this.running) {
-				this.scheduleWatchLoop();
+			if (this.running && generation === this.watchLoopGeneration) {
+				this.scheduleWatchLoop(generation);
 			}
 		}, this.WATCH_LOOP_INTERVAL);
 	}

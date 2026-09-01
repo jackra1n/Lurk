@@ -284,7 +284,8 @@ export class TwitchClient {
 								'X-Device-Id': this.deviceId,
 								'Content-Type': 'application/json'
 							},
-							body: JSON.stringify(body)
+							body: JSON.stringify(body),
+							signal: fetchTimeout()
 						})
 				);
 

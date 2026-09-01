@@ -2,16 +2,21 @@ import { describe, expect, test, vi } from 'bun:test';
 import { selectDueStreamers } from './streamers';
 import { createDefaultStreamData, type StreamerState } from './types';
 import { DEFAULT_CHANNEL_POINTS_STATUS } from './channel-points-status';
-import { encodeMinuteWatchedPayload, TwitchClient } from '../twitch-client';
+import { encodeMinuteWatchedPayload, twitchClient, TwitchClient } from '../twitch-client';
+import { getStreamers } from '../config';
 import { MinerService } from './service';
 
 const MINUTE = 59_000;
 
 interface WatchLoopInternals {
 	running: boolean;
+	userId: string | null;
+	streamerStates: Map<string, StreamerState>;
+	watchedStreamerNames: Set<string>;
 	WATCH_LOOP_INTERVAL: number;
 	startWatchLoop(): void;
 	invalidateWatchLoop(): void;
+	persistWatchTransitions(nextWatchedStates: StreamerState[]): void;
 	sendMinuteWatchedForStreamers(): Promise<void>;
 }
 
@@ -117,6 +122,95 @@ describe('watch loop lifecycle', () => {
 			internals.running = false;
 			secondRun.resolve();
 			vi.useRealTimers();
+		}
+	});
+
+	test('keeps the next loop on the prior start deadline', async () => {
+		vi.useFakeTimers();
+		const service = new MinerService();
+		const internals = service as unknown as WatchLoopInternals;
+		const firstRun = Promise.withResolvers<void>();
+		const secondRun = Promise.withResolvers<void>();
+		let calls = 0;
+
+		try {
+			internals.WATCH_LOOP_INTERVAL = 100;
+			internals.sendMinuteWatchedForStreamers = () => {
+				calls++;
+				return calls === 1 ? firstRun.promise : secondRun.promise;
+			};
+
+			internals.running = true;
+			internals.startWatchLoop();
+			vi.advanceTimersByTime(100);
+			expect(calls).toBe(1);
+
+			vi.advanceTimersByTime(40);
+			firstRun.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			vi.advanceTimersByTime(59);
+			expect(calls).toBe(1);
+			vi.advanceTimersByTime(1);
+			expect(calls).toBe(2);
+		} finally {
+			internals.invalidateWatchLoop();
+			internals.running = false;
+			secondRun.resolve();
+			vi.useRealTimers();
+		}
+	});
+});
+
+describe('watched-state readiness', () => {
+	test('uses an empty effective watched set while the Spade URL is unavailable', async () => {
+		const service = new MinerService();
+		const internals = service as unknown as WatchLoopInternals;
+		const state = streamer('alpha', 0);
+		state.lastContextRefresh = Date.now();
+		state.stream.broadcastId = 'broadcast-alpha';
+		internals.userId = 'user';
+		internals.streamerStates = new Map([[state.name, state]]);
+
+		const originalGetSpadeUrl = twitchClient.getSpadeUrl;
+		let persisted: StreamerState[] | undefined;
+		twitchClient.getSpadeUrl = async () => null;
+		internals.persistWatchTransitions = (next) => {
+			persisted = next;
+		};
+
+		try {
+			await internals.sendMinuteWatchedForStreamers();
+			expect(persisted).toEqual([]);
+		} finally {
+			twitchClient.getSpadeUrl = originalGetSpadeUrl;
+		}
+	});
+
+	test('reports only the active watched set to runtime consumers', () => {
+		const configuredStreamers = getStreamers();
+		const originalStreamers = [...configuredStreamers];
+		const service = new MinerService();
+		const internals = service as unknown as WatchLoopInternals;
+		const state = streamer('alpha', 0);
+		state.stream.broadcastId = 'broadcast-alpha';
+
+		try {
+			configuredStreamers.splice(0, configuredStreamers.length, state.name);
+			internals.running = true;
+			internals.streamerStates = new Map([[state.name, state]]);
+			internals.watchedStreamerNames = new Set();
+			expect(service.getStreamerRuntimeStates()).toEqual([
+				{ login: state.name, isOnline: true, isWatched: false }
+			]);
+
+			internals.watchedStreamerNames = new Set([state.name]);
+			expect(service.getStreamerRuntimeStates()).toEqual([
+				{ login: state.name, isOnline: true, isWatched: true }
+			]);
+		} finally {
+			configuredStreamers.splice(0, configuredStreamers.length, ...originalStreamers);
 		}
 	});
 });

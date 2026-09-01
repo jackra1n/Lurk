@@ -312,21 +312,22 @@ export class MinerService {
 		this.scheduleWatchLoop(generation);
 	}
 
-	private scheduleWatchLoop(generation: number): void {
+	private scheduleWatchLoop(generation: number, delayMs = this.WATCH_LOOP_INTERVAL): void {
 		this.watchLoopTimeout = setTimeout(async () => {
 			if (generation !== this.watchLoopGeneration) return;
 			this.watchLoopTimeout = null;
 			if (!this.running) return;
 
+			const nextRunAt = Date.now() + this.WATCH_LOOP_INTERVAL;
 			try {
 				await this.sendMinuteWatchedForStreamers();
 			} catch (err) {
 				logger.error({ err }, 'Minute-watched loop error');
 			}
 			if (this.running && generation === this.watchLoopGeneration) {
-				this.scheduleWatchLoop(generation);
+				this.scheduleWatchLoop(generation, Math.max(0, nextRunAt - Date.now()));
 			}
-		}, this.WATCH_LOOP_INTERVAL);
+		}, delayMs);
 	}
 
 	private async tick(): Promise<void> {
@@ -362,16 +363,21 @@ export class MinerService {
 		}
 
 		const selectedStreamers = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
+		if (selectedStreamers.length === 0) {
+			this.persistWatchTransitions([]);
+			return;
+		}
+
+		const spadeUrl = await twitchClient.getSpadeUrl();
+		if (!spadeUrl) {
+			this.persistWatchTransitions([]);
+			logger.warn('No spade URL available, skipping minute-watched round');
+			return;
+		}
 		this.persistWatchTransitions(selectedStreamers);
 
 		const dueStreamers = selectDueStreamers(selectedStreamers, now, this.MINUTE_WATCHED_INTERVAL);
 		if (dueStreamers.length === 0) return;
-
-		const spadeUrl = await twitchClient.getSpadeUrl();
-		if (!spadeUrl) {
-			logger.warn('No spade URL available, skipping minute-watched round');
-			return;
-		}
 
 		const delayBetween = this.WATCH_LOOP_INTERVAL / dueStreamers.length;
 
@@ -478,9 +484,7 @@ export class MinerService {
 			}));
 		}
 
-		const watched = new Set(
-			selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS).map((streamer) => streamer.name)
-		);
+		const watched = this.watchedStreamerNames;
 
 		return configuredStreamers.map((login) => {
 			const state = this.streamerStates.get(login);

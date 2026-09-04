@@ -204,16 +204,6 @@ export async function checkStreamerOnline(state: StreamerState): Promise<void> {
 				'Streamer went LIVE'
 			);
 		}
-
-		// fetch spade URL if we don't have one (needed for minute-watched)
-		if (!state.stream.spadeUrl) {
-			const spadeUrl = await twitchClient.getSpadeUrl(state.name);
-			if (spadeUrl) {
-				state.stream.spadeUrl = spadeUrl;
-			} else {
-				logger.warn({ streamer: state.name }, 'Could not fetch spade URL');
-			}
-		}
 	} else if (streamStatus.kind === 'offline') {
 		if (state.isLive) {
 			const {
@@ -403,7 +393,6 @@ export function selectStreamersToWatch(
 			state.isLive &&
 			state.channelId &&
 			state.stream.broadcastId &&
-			state.stream.spadeUrl &&
 			(state.stream.onlineAt === 0 || now - state.stream.onlineAt > 30_000)
 		) {
 			eligible.push(state);
@@ -419,4 +408,13 @@ export function selectStreamersToWatch(
 	});
 
 	return eligible.slice(0, maxWatched);
+}
+
+// real players emit minute-watched roughly once per minute per stream
+export function selectDueStreamers(
+	selected: StreamerState[],
+	now: number,
+	minuteWatchedIntervalMs: number
+): StreamerState[] {
+	return selected.filter((state) => now - state.stream.minuteWatchedTimestamp >= minuteWatchedIntervalMs);
 }

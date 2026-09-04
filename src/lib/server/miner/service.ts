@@ -13,6 +13,7 @@ import {
 	subscribeToStreamer,
 	checkStreamerOnline,
 	selectStreamersToWatch,
+	selectDueStreamers,
 	processStreamer,
 	claimBonus,
 	withEventStore
@@ -20,9 +21,10 @@ import {
 
 const logger = getLogger('Miner');
 
-class MinerService {
+export class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
-	private minuteWatcherInterval: ReturnType<typeof setInterval> | null = null;
+	private watchLoopTimeout: ReturnType<typeof setTimeout> | null = null;
+	private watchLoopGeneration = 0;
 	private starting = false;
 	private running = false;
 	private startedAt: Date | null = null;
@@ -34,7 +36,8 @@ class MinerService {
 	private lastStartResult: MinerStartResult | null = null;
 
 	private readonly TICK_INTERVAL = 30 * 60_000; // 30 minutes -- PubSub handles real-time events
-	private readonly MINUTE_WATCHED_INTERVAL = 20_000; // 20 seconds
+	private readonly WATCH_LOOP_INTERVAL = 20_000;
+	private readonly MINUTE_WATCHED_INTERVAL = 59_000;
 	private readonly MAX_WATCHED_STREAMERS = 2;
 
 	// message deduplication
@@ -53,10 +56,7 @@ class MinerService {
 			clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (this.minuteWatcherInterval) {
-			clearInterval(this.minuteWatcherInterval);
-			this.minuteWatcherInterval = null;
-		}
+		this.invalidateWatchLoop();
 
 		this.persistWatchTransitions([]);
 		twitchPubSubPool.disconnect();
@@ -254,11 +254,7 @@ class MinerService {
 			}, this.TICK_INTERVAL);
 
 			logger.info('Starting minute-watched loop...');
-			this.minuteWatcherInterval = setInterval(() => {
-				this.sendMinuteWatchedForStreamers().catch((err) => {
-					logger.error({ err }, 'Minute-watched loop error');
-				});
-			}, this.MINUTE_WATCHED_INTERVAL);
+			this.startWatchLoop();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to finish miner startup');
 			this.cleanupFailedStart();
@@ -288,10 +284,7 @@ class MinerService {
 			clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (this.minuteWatcherInterval) {
-			clearInterval(this.minuteWatcherInterval);
-			this.minuteWatcherInterval = null;
-		}
+		this.invalidateWatchLoop();
 
 		this.persistWatchTransitions([]);
 		twitchPubSubPool.disconnect();
@@ -304,6 +297,37 @@ class MinerService {
 		this.startedAt = null;
 		this.userId = null;
 		logger.info('Stopped');
+	}
+
+	private invalidateWatchLoop(): void {
+		this.watchLoopGeneration++;
+		if (this.watchLoopTimeout) {
+			clearTimeout(this.watchLoopTimeout);
+			this.watchLoopTimeout = null;
+		}
+	}
+
+	private startWatchLoop(): void {
+		const generation = ++this.watchLoopGeneration;
+		this.scheduleWatchLoop(generation);
+	}
+
+	private scheduleWatchLoop(generation: number, delayMs = this.WATCH_LOOP_INTERVAL): void {
+		this.watchLoopTimeout = setTimeout(async () => {
+			if (generation !== this.watchLoopGeneration) return;
+			this.watchLoopTimeout = null;
+			if (!this.running) return;
+
+			const nextRunAt = Date.now() + this.WATCH_LOOP_INTERVAL;
+			try {
+				await this.sendMinuteWatchedForStreamers();
+			} catch (err) {
+				logger.error({ err }, 'Minute-watched loop error');
+			}
+			if (this.running && generation === this.watchLoopGeneration) {
+				this.scheduleWatchLoop(generation, Math.max(0, nextRunAt - Date.now()));
+			}
+		}, delayMs);
 	}
 
 	private async tick(): Promise<void> {
@@ -320,9 +344,9 @@ class MinerService {
 	}
 
 	/**
-	 * core minute-watched loop body. Called every ~20 seconds.
-	 * for each selected streamer: fetch playback token, resolve HLS stream URL,
-	 * HEAD-verify it, then POST a minute-watched event to the spade endpoint.
+	 * core watch loop body, called every ~20 seconds. For each due streamer:
+	 * touch the newest HLS segment (playlist URL cached per broadcast) to
+	 * simulate watching, then POST a minute-watched event to the spade endpoint.
 	 */
 	private async sendMinuteWatchedForStreamers(): Promise<void> {
 		if (!this.userId) return;
@@ -339,29 +363,54 @@ class MinerService {
 		}
 
 		const selectedStreamers = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
+		if (selectedStreamers.length === 0) {
+			this.persistWatchTransitions([]);
+			return;
+		}
+
+		const spadeUrl = await twitchClient.getSpadeUrl();
+		if (!spadeUrl) {
+			this.persistWatchTransitions([]);
+			logger.warn('No spade URL available, skipping minute-watched round');
+			return;
+		}
 		this.persistWatchTransitions(selectedStreamers);
-		if (selectedStreamers.length === 0) return;
 
-		const delayBetween = this.MINUTE_WATCHED_INTERVAL / selectedStreamers.length;
+		const dueStreamers = selectDueStreamers(selectedStreamers, now, this.MINUTE_WATCHED_INTERVAL);
+		if (dueStreamers.length === 0) return;
 
-		for (let i = 0; i < selectedStreamers.length; i++) {
-			const streamerState = selectedStreamers[i];
-			if (!streamerState.channelId || !streamerState.stream.broadcastId || !streamerState.stream.spadeUrl) continue;
+		const delayBetween = this.WATCH_LOOP_INTERVAL / dueStreamers.length;
+
+		for (let i = 0; i < dueStreamers.length; i++) {
+			const streamerState = dueStreamers[i];
+			if (!streamerState.channelId || !streamerState.stream.broadcastId) continue;
 
 			try {
-				const token = await twitchClient.getPlaybackAccessToken(streamerState.name);
-				if (!token) {
-					logger.debug({ streamer: streamerState.name }, 'Could not get playback token, skipping minute-watched');
-					continue;
+				if (!streamerState.stream.hlsPlaylistUrl) {
+					const token = await twitchClient.getPlaybackAccessToken(streamerState.name);
+					if (!token) {
+						logger.debug({ streamer: streamerState.name }, 'Could not get playback token, skipping minute-watched');
+						continue;
+					}
+
+					streamerState.stream.hlsPlaylistUrl = await twitchClient.fetchLowestQualityPlaylistUrl(
+						streamerState.name,
+						token.signature,
+						token.value
+					);
+					if (!streamerState.stream.hlsPlaylistUrl) {
+						logger.debug({ streamer: streamerState.name }, 'Could not resolve playlist URL, skipping minute-watched');
+						continue;
+					}
 				}
 
-				const streamUrl = await twitchClient.fetchLowestQualityStreamUrl(
+				const watching = await twitchClient.touchStreamSegment(
 					streamerState.name,
-					token.signature,
-					token.value
+					streamerState.stream.hlsPlaylistUrl
 				);
-				if (!streamUrl) {
-					logger.debug({ streamer: streamerState.name }, 'Could not resolve stream URL, skipping minute-watched');
+				if (!watching) {
+					streamerState.stream.hlsPlaylistUrl = null;
+					logger.debug({ streamer: streamerState.name }, 'Stream segment check failed, will refresh playlist URL');
 					continue;
 				}
 
@@ -372,12 +421,13 @@ class MinerService {
 					streamerState.name
 				);
 
-				const success = await twitchClient.sendMinuteWatchedEvent(streamerState.stream.spadeUrl, payload);
+				const success = await twitchClient.sendMinuteWatchedEvent(spadeUrl, payload);
 				if (success) {
+					const sentAt = Date.now();
 					if (streamerState.stream.minuteWatchedTimestamp > 0) {
-						streamerState.stream.minuteWatched += (now - streamerState.stream.minuteWatchedTimestamp) / 60_000;
+						streamerState.stream.minuteWatched += (sentAt - streamerState.stream.minuteWatchedTimestamp) / 60_000;
 					}
-					streamerState.stream.minuteWatchedTimestamp = now;
+					streamerState.stream.minuteWatchedTimestamp = sentAt;
 					logger.debug(
 						{ streamer: streamerState.name, minuteWatched: streamerState.stream.minuteWatched.toFixed(2) },
 						'Sent minute-watched event'
@@ -405,7 +455,7 @@ class MinerService {
 			}
 
 			// space out requests between streamers (skip delay after last one)
-			if (i < selectedStreamers.length - 1) {
+			if (i < dueStreamers.length - 1) {
 				await new Promise((resolve) => setTimeout(resolve, delayBetween));
 			}
 		}
@@ -434,9 +484,7 @@ class MinerService {
 			}));
 		}
 
-		const watched = new Set(
-			selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS).map((streamer) => streamer.name)
-		);
+		const watched = this.watchedStreamerNames;
 
 		return configuredStreamers.map((login) => {
 			const state = this.streamerStates.get(login);

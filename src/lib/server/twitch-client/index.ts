@@ -10,6 +10,44 @@ import { getLogger } from '../logger';
 import { AsyncRateLimiter, RateLimiterQueueFullError } from './rate-limiter';
 
 const VERSION_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const SPADE_URL_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const SPADE_URL_RETRY_INTERVAL_MS = 60 * 1000;
+const FETCH_TIMEOUT_MS = 10_000;
+
+// every outbound fetch gets a hard deadline so a wedged socket cannot stall a caller
+const fetchTimeout = (): AbortSignal => AbortSignal.timeout(FETCH_TIMEOUT_MS);
+
+const TRANSIENT_FETCH_ERROR_CODES: Record<string, true> = {
+	ECONNRESET: true,
+	ETIMEDOUT: true,
+	EPIPE: true,
+	UND_ERR_SOCKET: true
+};
+
+export const isTransientFetchError = (error: unknown): boolean => {
+	if (!(error instanceof Error)) return false;
+	if (error.name === 'TimeoutError' || error.name === 'AbortError') return true;
+	return (
+		'code' in error &&
+		typeof error.code === 'string' &&
+		TRANSIENT_FETCH_ERROR_CODES[error.code] === true
+	);
+};
+
+export interface SpadeUrlCache {
+	spadeUrl: string | null;
+	lastSpadeUrlFetch: number;
+	lastSpadeUrlAttempt: number;
+}
+
+// decide whether a cached spade URL can be reused or a scrape is needed;
+// failures back off via lastSpadeUrlAttempt so callers do not hammer twitch.tv
+export const shouldRefetchSpadeUrl = (cache: SpadeUrlCache, now: number): boolean => {
+	const fresh = cache.spadeUrl !== null && now - cache.lastSpadeUrlFetch < SPADE_URL_REFRESH_INTERVAL_MS;
+	if (fresh) return false;
+	return now - cache.lastSpadeUrlAttempt >= SPADE_URL_RETRY_INTERVAL_MS;
+};
+
 const TWITCH_BUILD_ID_PATTERN = /window\.__twilightBuildID\s*=\s*"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/;
 const GQL_RATE_LIMIT_RPS = 5;
 const GQL_RATE_LIMIT_BURST = GQL_RATE_LIMIT_RPS;
@@ -98,6 +136,18 @@ const jitterDelay = (delayMs: number) => {
 const summarizeGqlErrors = (errors: GqlError[]) =>
 	[...new Set(errors.map((error) => error.message))].slice(0, 4);
 
+// playlists can end with tags like #EXT-X-TWITCH-PREFETCH or #EXT-X-ENDLIST
+export const lastUrlLine = (playlist: string): string | null => {
+	const lines = playlist.split('\n');
+	for (let i = lines.length - 1; i >= 0; i--) {
+		const line = lines[i].trim();
+		if (line.length > 0 && !line.startsWith('#')) {
+			return line;
+		}
+	}
+	return null;
+};
+
 function classifyGqlErrors(errors: GqlError[]): GqlErrorSummary {
 	const messages = summarizeGqlErrors(errors);
 	const normalized = messages.map(normalizeErrorMessage);
@@ -148,6 +198,9 @@ export class TwitchClient {
 	private clientSessionId = randomBytes(16).toString('hex');
 	private clientVersion = CLIENT_VERSION_FALLBACK;
 	private lastVersionFetch = 0;
+	spadeUrl: string | null = null;
+	lastSpadeUrlFetch = 0;
+	lastSpadeUrlAttempt = 0;
 	private gqlLimiter = new AsyncRateLimiter({
 		ratePerSecond: GQL_RATE_LIMIT_RPS,
 		burst: GQL_RATE_LIMIT_BURST,
@@ -188,7 +241,8 @@ export class TwitchClient {
 
 		try {
 			const response = await fetch('https://www.twitch.tv', {
-				headers: { 'User-Agent': USER_AGENT }
+				headers: { 'User-Agent': USER_AGENT },
+				signal: fetchTimeout()
 			});
 
 			if (!response.ok) {
@@ -247,7 +301,8 @@ export class TwitchClient {
 								'X-Device-Id': this.deviceId,
 								'Content-Type': 'application/json'
 							},
-							body: JSON.stringify(body)
+							body: JSON.stringify(body),
+							signal: fetchTimeout()
 						})
 				);
 
@@ -548,17 +603,25 @@ export class TwitchClient {
 		return { ok: true };
 	}
 
-	async getSpadeUrl(channelLogin: string): Promise<string | null> {
+	// spade_url lives in Twitch's global settings JS -- same value for every channel
+	async getSpadeUrl(): Promise<string | null> {
+		const now = Date.now();
+		if (!shouldRefetchSpadeUrl(this, now)) {
+			return this.spadeUrl;
+		}
+		this.lastSpadeUrlAttempt = now;
+
 		try {
 			const headers = { 'User-Agent': USER_AGENT };
 
-			const pageResponse = await fetch(`https://www.twitch.tv/${channelLogin.toLowerCase()}`, {
+			const pageResponse = await fetch('https://www.twitch.tv', {
 				headers,
-				redirect: 'follow'
+				redirect: 'follow',
+				signal: fetchTimeout()
 			});
 			if (!pageResponse.ok) {
-				logger.error({ channelLogin, status: pageResponse.status }, 'Failed to fetch channel page for spade URL');
-				return null;
+				logger.error({ status: pageResponse.status }, 'Failed to fetch twitch.tv for spade URL');
+				return this.spadeUrl;
 			}
 			const pageHtml = await pageResponse.text();
 
@@ -566,28 +629,30 @@ export class TwitchClient {
 				/(https:\/\/static\.twitchcdn\.net\/config\/settings.*?js|https:\/\/assets\.twitch\.tv\/config\/settings.*?\.js)/
 			);
 			if (!settingsMatch) {
-				logger.error({ channelLogin }, 'Could not find settings JS URL in channel page');
-				return null;
+				logger.error('Could not find settings JS URL in twitch.tv page');
+				return this.spadeUrl;
 			}
 
-			const settingsResponse = await fetch(settingsMatch[1], { headers });
+			const settingsResponse = await fetch(settingsMatch[1], { headers, signal: fetchTimeout() });
 			if (!settingsResponse.ok) {
-				logger.error({ channelLogin, status: settingsResponse.status }, 'Failed to fetch settings JS');
-				return null;
+				logger.error({ status: settingsResponse.status }, 'Failed to fetch settings JS');
+				return this.spadeUrl;
 			}
 			const settingsJs = await settingsResponse.text();
 
 			const spadeMatch = settingsJs.match(/"spade_url":"(.*?)"/);
 			if (!spadeMatch) {
-				logger.error({ channelLogin }, 'Could not find spade_url in settings JS');
-				return null;
+				logger.error('Could not find spade_url in settings JS');
+				return this.spadeUrl;
 			}
 
-			logger.debug({ channelLogin, spadeUrl: spadeMatch[1] }, 'Got spade URL');
-			return spadeMatch[1];
+			this.spadeUrl = spadeMatch[1];
+			this.lastSpadeUrlFetch = now;
+			logger.debug({ spadeUrl: this.spadeUrl }, 'Got spade URL');
+			return this.spadeUrl;
 		} catch (error) {
-			logger.error({ err: error, channelLogin }, 'Error fetching spade URL');
-			return null;
+			logger.error({ err: error }, 'Error fetching spade URL');
+			return this.spadeUrl;
 		}
 	}
 
@@ -631,60 +696,79 @@ export class TwitchClient {
 		return { signature: token.signature, value: token.value };
 	}
 
-	// fetch the HLS master manifest for a channel, then resolve the lowest quality stream URL
-	async fetchLowestQualityStreamUrl(
+	// resolve the lowest quality variant playlist URL from the HLS master manifest;
+	// stable for the lifetime of a broadcast, so callers should cache it
+	async fetchLowestQualityPlaylistUrl(
 		login: string,
 		signature: string,
 		value: string
 	): Promise<string | null> {
 		try {
-			const headers = { 'User-Agent': USER_AGENT };
 			const masterUrl =
 				`https://usher.ttvnw.net/api/channel/hls/${login.toLowerCase()}.m3u8` +
 				`?sig=${signature}&token=${encodeURIComponent(value)}`;
 
-			const masterResponse = await fetch(masterUrl, { headers, redirect: 'follow' });
-			if (!masterResponse.ok) {
-				logger.debug({ login, status: masterResponse.status }, 'Failed to fetch HLS master manifest');
+			const response = await fetch(masterUrl, {
+				headers: { 'User-Agent': USER_AGENT },
+				redirect: 'follow',
+				signal: fetchTimeout()
+			});
+			if (!response.ok) {
+				logger.debug({ login, status: response.status }, 'Failed to fetch HLS master manifest');
 				return null;
 			}
-			const masterPlaylist = await masterResponse.text();
+			const masterPlaylist = await response.text();
 
-			// last non-empty line in the master playlist is the lowest quality variant URL
-			const masterLines = masterPlaylist.split('\n').filter((l) => l.trim().length > 0);
-			const lowestQualityUrl = masterLines[masterLines.length - 1];
-			if (!lowestQualityUrl || lowestQualityUrl.startsWith('#')) {
+			const lowestQualityUrl = lastUrlLine(masterPlaylist);
+			if (!lowestQualityUrl) {
 				logger.debug({ login }, 'No stream URL found in master manifest');
 				return null;
 			}
 
-			// fetch the variant playlist to get an actual stream segment URL
-			const variantResponse = await fetch(lowestQualityUrl, { headers, redirect: 'follow' });
-			if (!variantResponse.ok) {
-				logger.debug({ login, status: variantResponse.status }, 'Failed to fetch variant playlist');
-				return null;
-			}
-			const variantPlaylist = await variantResponse.text();
+			return lowestQualityUrl;
+		} catch (error) {
+			logger.error({ err: error, login }, 'Error fetching lowest quality playlist URL');
+			return null;
+		}
+	}
 
-			// second-to-last non-empty line is the segment URL
-			const variantLines = variantPlaylist.split('\n').filter((l) => l.trim().length > 0);
-			const streamSegmentUrl = variantLines[variantLines.length - 1];
-			if (!streamSegmentUrl || streamSegmentUrl.startsWith('#')) {
+	// fetch the variant playlist and HEAD its newest segment to simulate watching
+	async touchStreamSegment(login: string, playlistUrl: string): Promise<boolean> {
+		try {
+			const headers = { 'User-Agent': USER_AGENT };
+
+			const playlistResponse = await fetch(playlistUrl, {
+				headers,
+				redirect: 'follow',
+				signal: fetchTimeout()
+			});
+			if (!playlistResponse.ok) {
+				logger.debug({ login, status: playlistResponse.status }, 'Failed to fetch variant playlist');
+				return false;
+			}
+			const playlist = await playlistResponse.text();
+
+			const segmentUrl = lastUrlLine(playlist);
+			if (!segmentUrl) {
 				logger.debug({ login }, 'No stream segment URL found in variant playlist');
-				return null;
+				return false;
 			}
 
-			// verify segment URL is reachable
-			const headResponse = await fetch(streamSegmentUrl, { method: 'HEAD', headers, redirect: 'follow' });
+			const headResponse = await fetch(segmentUrl, {
+				method: 'HEAD',
+				headers,
+				redirect: 'follow',
+				signal: fetchTimeout()
+			});
 			if (!headResponse.ok) {
 				logger.debug({ login, status: headResponse.status }, 'Stream segment URL HEAD check failed');
-				return null;
+				return false;
 			}
 
-			return streamSegmentUrl;
+			return true;
 		} catch (error) {
-			logger.error({ err: error, login }, 'Error fetching lowest quality stream URL');
-			return null;
+			logger.error({ err: error, login }, 'Error touching stream segment');
+			return false;
 		}
 	}
 
@@ -696,12 +780,17 @@ export class TwitchClient {
 					'User-Agent': USER_AGENT,
 					'Content-Type': 'application/x-www-form-urlencoded'
 				},
-				body: new URLSearchParams({ data: encodedPayload })
+				body: new URLSearchParams({ data: encodedPayload }),
+				signal: fetchTimeout()
 			});
 
 			return response.status === 204;
 		} catch (error) {
-			logger.error({ err: error }, 'Error sending minute-watched event');
+			if (isTransientFetchError(error)) {
+				logger.debug('Transient network failure sending minute-watched event');
+			} else {
+				logger.error({ err: error }, 'Error sending minute-watched event');
+			}
 			return false;
 		}
 	}

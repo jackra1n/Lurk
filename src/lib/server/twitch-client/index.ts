@@ -17,6 +17,23 @@ const FETCH_TIMEOUT_MS = 10_000;
 // every outbound fetch gets a hard deadline so a wedged socket cannot stall a caller
 const fetchTimeout = (): AbortSignal => AbortSignal.timeout(FETCH_TIMEOUT_MS);
 
+const TRANSIENT_FETCH_ERROR_CODES: Record<string, true> = {
+	ECONNRESET: true,
+	ETIMEDOUT: true,
+	EPIPE: true,
+	UND_ERR_SOCKET: true
+};
+
+export const isTransientFetchError = (error: unknown): boolean => {
+	if (!(error instanceof Error)) return false;
+	if (error.name === 'TimeoutError' || error.name === 'AbortError') return true;
+	return (
+		'code' in error &&
+		typeof error.code === 'string' &&
+		TRANSIENT_FETCH_ERROR_CODES[error.code] === true
+	);
+};
+
 export interface SpadeUrlCache {
 	spadeUrl: string | null;
 	lastSpadeUrlFetch: number;
@@ -769,7 +786,11 @@ export class TwitchClient {
 
 			return response.status === 204;
 		} catch (error) {
-			logger.error({ err: error }, 'Error sending minute-watched event');
+			if (isTransientFetchError(error)) {
+				logger.debug('Transient network failure sending minute-watched event');
+			} else {
+				logger.error({ err: error }, 'Error sending minute-watched event');
+			}
 			return false;
 		}
 	}

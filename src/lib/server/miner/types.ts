@@ -28,6 +28,26 @@ export function createDefaultStreamData(): StreamData {
 	};
 }
 
+export interface StreamMetadataState {
+	status: 'unavailable' | 'fresh' | 'stale' | 'failed';
+	lastAttemptAtMs: number;
+	lastSuccessAtMs: number;
+	lastFailureAtMs: number;
+	nextCheckAtMs: number;
+	generation: number;
+}
+
+export function createDefaultStreamMetadataState(): StreamMetadataState {
+	return {
+		status: 'unavailable',
+		lastAttemptAtMs: 0,
+		lastSuccessAtMs: 0,
+		lastFailureAtMs: 0,
+		nextCheckAtMs: 0,
+		generation: 0
+	};
+}
+
 export interface StreamerState {
 	name: string;
 	channelId: string | null;
@@ -38,6 +58,7 @@ export interface StreamerState {
 	startingPoints: number | null;
 	offlineAt: number; // confirmed offline, used for 60-second debounce
 	lastContextRefresh: number; // epoch ms
+	metadata: StreamMetadataState;
 	activeMultipliers: { factor: number }[];
 	history: Record<string, { counter: number; amount: number }>;
 	stream: StreamData;

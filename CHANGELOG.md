@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+* back off failing Twitch GraphQL operations across channels, honor Retry-After, and use a single recovery probe with bounded outage and recovery logging
+* classify temporary subgraph and persisted-query service failures correctly; defer unresolved persisted queries without assuming a client-version refresh replaces their hashes
+* refresh stream metadata independently of watch telemetry, preserve known state during outages, and discard obsolete responses after stream-down or restart
+* retry unresolved channel IDs after startup failures and avoid automatic replay of ambiguous bonus claims
+
 ## [1.2.0](https://github.com/jackra1n/Lurk/compare/1.1.0...1.2.0) (2026-02-26)
 
 

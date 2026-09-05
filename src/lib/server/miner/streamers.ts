@@ -11,6 +11,7 @@ import {
 	type StreamerState,
 	PubSubTopicType,
 	createDefaultStreamData,
+	createDefaultStreamMetadataState,
 	findStreamerByChannelId,
 	streamerContext
 } from './types';
@@ -22,6 +23,16 @@ import {
 
 const logger = getLogger('Miner');
 const DISABLED_CHANNEL_POINTS_RECHECK_INTERVAL_MS = 12 * 60 * 60_000;
+const LIVE_METADATA_REFRESH_INTERVAL_MS = 10 * 60_000;
+const OFFLINE_METADATA_REFRESH_INTERVAL_MS = 2 * 60_000;
+const METADATA_RETRY_INTERVAL_MS = 60_000;
+const metadataChecks = new WeakMap<StreamerState, Promise<void>>();
+
+export function invalidateStreamMetadata(state: StreamerState, nextCheckAtMs = 0): void {
+	state.metadata.generation++;
+	state.metadata.status = state.metadata.lastSuccessAtMs > 0 ? 'stale' : 'unavailable';
+	state.metadata.nextCheckAtMs = nextCheckAtMs;
+}
 
 function setChannelPointsStatus(
 	state: StreamerState,
@@ -98,13 +109,23 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
 				startingPoints: null,
 				offlineAt: 0,
 				lastContextRefresh: 0,
+				metadata: createDefaultStreamMetadataState(),
 				activeMultipliers: [],
 				history: {},
 				stream: createDefaultStreamData()
 			});
 
 			if (!channelId) {
-				logger.warn({ streamer: name }, 'Could not get channel ID');
+				logger.debug({ streamer: name }, 'Channel ID lookup unavailable; retrying on next context refresh');
+			}
+		} else {
+			const state = streamerStates.get(name)!;
+			if (!state.channelId) {
+				state.channelId = await twitchClient.getUserId(name);
+				if (state.channelId) {
+					await subscribeToStreamer(state);
+					logger.info({ ...streamerContext(state) }, 'Channel ID lookup recovered');
+				}
 			}
 		}
 
@@ -129,6 +150,7 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
 	// Remove streamers that are no longer in config
 	for (const name of streamerStates.keys()) {
 		if (!streamers.includes(name)) {
+			invalidateStreamMetadata(streamerStates.get(name)!);
 			streamerStates.delete(name);
 		}
 	}
@@ -161,15 +183,65 @@ export async function subscribeToStreamer(state: StreamerState): Promise<void> {
 	}
 }
 
-export async function checkStreamerOnline(state: StreamerState): Promise<void> {
-	if (!state.channelId) return;
+export function checkStreamerOnline(state: StreamerState): Promise<void> {
+	const inFlight = metadataChecks.get(state);
+	if (inFlight) return inFlight;
+	const now = Date.now();
+	if (!state.channelId || now < state.metadata.nextCheckAtMs) return Promise.resolve();
+	if (state.offlineAt > 0 && now - state.offlineAt < 60_000) return Promise.resolve();
 
-	if (state.offlineAt > 0 && Date.now() - state.offlineAt < 60_000) {
-		logger.debug({ streamer: state.name }, 'Skipping online check (offline debounce)');
+	const generation = state.metadata.generation;
+	state.metadata.lastAttemptAtMs = now;
+	state.metadata.status = state.metadata.lastSuccessAtMs > 0 ? 'stale' : 'unavailable';
+	// Defer execution until the shared promise is registered, including synchronous failures.
+	const check = Promise.resolve()
+		.then(() => refreshStreamMetadata(state, generation))
+		.catch((err) => {
+			if (generation !== state.metadata.generation) return;
+			state.metadata.status = 'failed';
+			state.metadata.lastFailureAtMs = Date.now();
+			state.metadata.nextCheckAtMs = Date.now() + METADATA_RETRY_INTERVAL_MS;
+			logger.error({ err, streamer: state.name }, 'Failed to refresh stream metadata');
+		})
+		.finally(() => {
+			metadataChecks.delete(state);
+		});
+	metadataChecks.set(state, check);
+	return check;
+}
+
+async function refreshStreamMetadata(state: StreamerState, generation: number): Promise<void> {
+	if (generation !== state.metadata.generation) return;
+	const streamStatus = await twitchClient.getStreamInfoStatus(state.name);
+	if (generation !== state.metadata.generation) return;
+
+	const now = Date.now();
+	if (streamStatus.kind === 'unknown') {
+		state.metadata.status = 'failed';
+		state.metadata.lastFailureAtMs = now;
+		state.metadata.nextCheckAtMs = Math.max(
+			now + METADATA_RETRY_INTERVAL_MS,
+			streamStatus.retryAtMs ?? 0
+		);
+		if (streamStatus.reason !== 'gql_error') {
+			logger.warn(
+				{
+					streamer: state.name,
+					reason: streamStatus.reason,
+					errors: streamStatus.errors?.map((error) => error.message)
+				},
+				'Could not verify streamer status via API; preserving previous state'
+			);
+		}
 		return;
 	}
 
-	const streamStatus = await twitchClient.getStreamInfoStatus(state.name);
+	state.metadata.status = 'fresh';
+	state.metadata.lastSuccessAtMs = now;
+	state.metadata.nextCheckAtMs =
+		now + (streamStatus.kind === 'live'
+			? LIVE_METADATA_REFRESH_INTERVAL_MS
+			: OFFLINE_METADATA_REFRESH_INTERVAL_MS);
 
 	if (streamStatus.kind === 'live') {
 		applyStreamInfo(state, streamStatus.info);
@@ -231,15 +303,6 @@ export async function checkStreamerOnline(state: StreamerState): Promise<void> {
 			logger.info({ streamer: state.name }, 'Streamer went OFFLINE (verified via API)');
 		}
 		state.stream = createDefaultStreamData();
-	} else {
-		logger.warn(
-			{
-				streamer: state.name,
-				reason: streamStatus.reason,
-				errors: streamStatus.errors?.map((error) => error.message)
-			},
-			'Could not verify streamer status via API; preserving previous state'
-		);
 	}
 }
 
@@ -289,7 +352,9 @@ export async function claimBonus(
 					}
 				});
 			});
-			logger.warn({ ...logContext, reason: result.reason }, 'Failed to claim bonus');
+			if (result.reason !== 'gql_error') {
+				logger.warn({ ...logContext, reason: result.reason }, 'Failed to claim bonus');
+			}
 			return;
 		}
 
@@ -376,7 +441,7 @@ export async function processStreamer(
 			await claimBonus(streamerStates, state.channelId, context.availableClaimId, 'gql_context');
 		}
 	} else {
-		logger.warn({ streamer: state.name }, 'Streamer doesn\'t seem to have channel points context');
+		logger.debug({ streamer: state.name }, 'Channel points context refresh unavailable; preserving previous state');
 	}
 }
 

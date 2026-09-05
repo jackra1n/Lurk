@@ -12,6 +12,7 @@ import {
 	subscribeToPointsTopic,
 	subscribeToStreamer,
 	checkStreamerOnline,
+	invalidateStreamMetadata,
 	selectStreamersToWatch,
 	selectDueStreamers,
 	processStreamer,
@@ -25,6 +26,8 @@ export class MinerService {
 	private interval: ReturnType<typeof setInterval> | null = null;
 	private watchLoopTimeout: ReturnType<typeof setTimeout> | null = null;
 	private watchLoopGeneration = 0;
+	private metadataInterval: ReturnType<typeof setInterval> | null = null;
+	private metadataLoopGeneration = 0;
 	private starting = false;
 	private running = false;
 	private startedAt: Date | null = null;
@@ -57,6 +60,7 @@ export class MinerService {
 			this.interval = null;
 		}
 		this.invalidateWatchLoop();
+		this.invalidateMetadataLoop();
 
 		this.persistWatchTransitions([]);
 		twitchPubSubPool.disconnect();
@@ -141,7 +145,8 @@ export class MinerService {
 			dedup: this.dedup,
 			claimBonus: (channelId, claimId, source) =>
 				claimBonus(this.streamerStates, channelId, claimId, source),
-			checkStreamerOnline: (state) => checkStreamerOnline(state)
+			checkStreamerOnline: (state) =>
+				this.running ? checkStreamerOnline(state) : Promise.resolve()
 		};
 	}
 
@@ -196,9 +201,11 @@ export class MinerService {
 		this.running = true;
 		this.startedAt = new Date();
 		this.tickCount = 0;
+		const generation = this.metadataLoopGeneration;
 
 		const deps = this.getEventHandlerDeps();
 		twitchPubSubPool.onMessage((topic, messageType, data) => {
+			if (!this.running || generation !== this.metadataLoopGeneration) return;
 			handlePubSubMessage(deps, topic, messageType, data);
 		});
 
@@ -214,7 +221,7 @@ export class MinerService {
 			await twitchPubSubPool.connect();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to connect to PubSub');
-			this.cleanupFailedStart();
+			if (generation === this.metadataLoopGeneration) this.cleanupFailedStart();
 			return this.setStartResult({
 				success: false,
 				reason: 'pubsub_connect_failed',
@@ -226,6 +233,9 @@ export class MinerService {
 			logger.info('Setting up streamers...');
 
 			await syncStreamers(this.streamerStates);
+			if (!this.running || generation !== this.metadataLoopGeneration) {
+				throw new Error('Miner startup interrupted');
+			}
 			await subscribeToPointsTopic(this.userId);
 
 			for (const [, state] of this.streamerStates) {
@@ -234,30 +244,30 @@ export class MinerService {
 				}
 			}
 
-			// seed initial stream metadata and live status via API
-			logger.info('Fetching initial stream info...');
-			for (const [, state] of this.streamerStates) {
-				if (state.channelId) {
-					await checkStreamerOnline(state);
-				}
+			if (!this.running || generation !== this.metadataLoopGeneration) {
+				throw new Error('Miner startup interrupted');
 			}
+			// Metadata discovery and recovery run independently of watch telemetry.
+			this.startMetadataLoop();
+			logger.info('Starting minute-watched loop...');
+			this.startWatchLoop();
 
 			logger.info('Starting context refresh loop...');
 
 			// initial context refresh
 			await this.tick();
+			if (!this.running || generation !== this.metadataLoopGeneration) {
+				throw new Error('Miner startup interrupted');
+			}
 
 			this.interval = setInterval(() => {
 				this.tick().catch((err) => {
 					logger.error({ err }, 'Tick error');
 				});
 			}, this.TICK_INTERVAL);
-
-			logger.info('Starting minute-watched loop...');
-			this.startWatchLoop();
 		} catch (error) {
 			logger.error({ err: error }, 'Failed to finish miner startup');
-			this.cleanupFailedStart();
+			if (generation === this.metadataLoopGeneration) this.cleanupFailedStart();
 			return this.setStartResult({
 				success: false,
 				reason: 'start_failed',
@@ -285,6 +295,7 @@ export class MinerService {
 			this.interval = null;
 		}
 		this.invalidateWatchLoop();
+		this.invalidateMetadataLoop();
 
 		this.persistWatchTransitions([]);
 		twitchPubSubPool.disconnect();
@@ -297,6 +308,30 @@ export class MinerService {
 		this.startedAt = null;
 		this.userId = null;
 		logger.info('Stopped');
+	}
+
+	private invalidateMetadataLoop(): void {
+		this.metadataLoopGeneration++;
+		if (this.metadataInterval) {
+			clearInterval(this.metadataInterval);
+			this.metadataInterval = null;
+		}
+		for (const state of this.streamerStates.values()) {
+			invalidateStreamMetadata(state);
+		}
+	}
+
+	private startMetadataLoop(): void {
+		const generation = this.metadataLoopGeneration;
+		const refresh = () => {
+			if (!this.running || generation !== this.metadataLoopGeneration) return;
+			for (const state of this.streamerStates.values()) {
+				// One shared in-flight request and due time per streamer, also used by PubSub.
+				void checkStreamerOnline(state);
+			}
+		};
+		refresh();
+		this.metadataInterval = setInterval(refresh, this.WATCH_LOOP_INTERVAL);
 	}
 
 	private invalidateWatchLoop(): void {
@@ -352,15 +387,6 @@ export class MinerService {
 		if (!this.userId) return;
 
 		const now = Date.now();
-
-		// refresh metadata for online streamers with stale data (>10 minutes)
-		for (const [, state] of this.streamerStates) {
-			if (state.isLive && state.channelId && now - state.lastContextRefresh > 10 * 60_000) {
-				await checkStreamerOnline(state).catch((err) => {
-					logger.error({ err, streamer: state.name }, 'Failed to refresh stale stream metadata');
-				});
-			}
-		}
 
 		const selectedStreamers = selectStreamersToWatch(this.streamerStates, this.MAX_WATCHED_STREAMERS);
 		if (selectedStreamers.length === 0) {

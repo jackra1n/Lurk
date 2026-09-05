@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test';
-import { isTransientFetchError, shouldRefetchSpadeUrl, type SpadeUrlCache } from './index';
+import { describe, expect, spyOn, test } from 'bun:test';
+import { isTransientFetchError, shouldRefetchSpadeUrl, TwitchClient, type SpadeUrlCache } from './index';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -51,5 +51,47 @@ describe('isTransientFetchError', () => {
 
 	test('does not hide unexpected application errors', () => {
 		expect(isTransientFetchError(new TypeError('Invalid minute-watched payload'))).toBe(false);
+	});
+});
+
+describe('settings script discovery', () => {
+	test('discovers script attributes rather than URLs in comments or inline JavaScript', async () => {
+		const client = new TwitchClient();
+		const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (input) => {
+			const url = String(input);
+			if (url === 'https://www.twitch.tv') {
+				return new Response(`
+					<!-- <script src="https://static.twitchcdn.net/config/settings-comment.js"></script> -->
+					<script>const decoy = "https://static.twitchcdn.net/config/settings-inline.js";</script>
+					<script src="https://static.twitchcdn.net.evil.example/config/settings.js"></script>
+					<script src="http://static.twitchcdn.net/config/settings.js"></script>
+					<script src="https://static.twitchcdn.net/config/settings.js.map"></script>
+					<SCRIPT defer SRC = '//assets.twitch.tv/config/settings.release.js?v=1&amp;build=2'></SCRIPT>
+				`);
+			}
+			if (url === 'https://assets.twitch.tv/config/settings.release.js?v=1&build=2') {
+				return new Response('window.settings = {"spade_url":"https://example.com/spade"};');
+			}
+			throw new Error(`Unexpected settings request: ${url}`);
+		}) as typeof fetch);
+		try {
+			expect(await client.getSpadeUrl()).toBe('https://example.com/spade');
+		} finally {
+			fetchSpy.mockRestore();
+		}
+	});
+
+	test('preserves the cached endpoint when the page has no matching settings script', async () => {
+		const client = new TwitchClient();
+		client.spadeUrl = 'https://example.com/cached-spade';
+		const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (_input: RequestInfo | URL) =>
+			new Response('<a href="https://static.twitchcdn.net/config/settings.js">settings</a>')
+		) as typeof fetch);
+		try {
+			expect(await client.getSpadeUrl()).toBe('https://example.com/cached-spade');
+			expect(fetchSpy).toHaveBeenCalledTimes(1);
+		} finally {
+			fetchSpy.mockRestore();
+		}
 	});
 });

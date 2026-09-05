@@ -238,8 +238,14 @@ describe('operation-scoped GQL recovery', () => {
 
 describe('GQL error classification', () => {
 	test('classifies backend and persisted-query cache outages as transient', () => {
-		for (const message of ['service unavailable', 'PersistedQueryUnavailable', 'subgraph error', " Failed to fetch from Subgraph 'twitch.graphql.monolith'. "]) {
+		for (const message of ['service unavailable', 'PersistedQueryUnavailable', " Failed to fetch from Subgraph 'twitch.graphql.monolith'. "]) {
 			expect(classifyGqlErrors([{ message }])).toMatchObject({ category: 'transient', retryable: true });
+		}
+	});
+
+	test('does not infer retryability from unrelated error words or embedded error names', () => {
+		for (const message of ['Invalid subgraph query', 'subgraph error', 'Failed validation for subgraph selection', 'Unexpected PersistedQueryUnavailable value', 'Unexpected PersistedQueryNotFound value']) {
+			expect(classifyGqlErrors([{ message }])).toMatchObject({ category: 'fatal', retryable: false });
 		}
 	});
 
@@ -253,10 +259,18 @@ describe('GQL error classification', () => {
 
 describe('Retry-After parsing', () => {
 	test('handles delta seconds and HTTP dates without allowing negative or malformed delays', () => {
-		expect(parseRetryAfterMs('1.5', now)).toBe(1500);
+		expect(parseRetryAfterMs(' 120 ', now)).toBe(120_000);
 		expect(parseRetryAfterMs(new Date(now + 60_000).toUTCString(), now)).toBe(60_000);
-		for (const value of [null, '', '-5', 'NaN', 'Infinity', 'not a date', new Date(now - 1000).toUTCString()]) {
+		for (const value of [null, '', '-5', '1.5', '+5', '1e3', '0x10', '120garbage', 'NaN', 'Infinity', 'not a date', '2026-09-06T00:00:00Z', 'Tue, 31 Feb 2026 00:00:00 GMT', new Date(now - 1000).toUTCString()]) {
 			expect(parseRetryAfterMs(value, now)).toBe(0);
 		}
+	});
+
+	test('accepts legacy HTTP dates in UTC and resolves two-digit years before validating weekdays', () => {
+		const epoch = Date.UTC(1994, 10, 6, 8, 49, 0);
+		expect(parseRetryAfterMs('Sunday, 06-Nov-94 08:49:37 GMT', epoch)).toBe(37_000);
+		expect(parseRetryAfterMs('Sun Nov  6 08:49:37 1994', epoch)).toBe(37_000);
+		const future = Date.UTC(2060, 0, 1);
+		expect(parseRetryAfterMs('Thursday, 01-Jan-60 00:00:00 GMT', now)).toBe(future - now);
 	});
 });

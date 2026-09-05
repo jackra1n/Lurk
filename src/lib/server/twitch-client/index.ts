@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { decodeHTMLAttribute } from 'entities/decode';
 import {
 	GQL_URL,
 	CLIENT_ID,
@@ -137,7 +138,8 @@ const RETRYABLE_GQL_MESSAGES: Record<string, true> = {
 	'service unavailable': true,
 	'context deadline exceeded': true,
 	'service error': true,
-	'server error': true
+	'server error': true,
+	'persistedqueryunavailable': true
 };
 
 const AUTH_GQL_MESSAGE_PATTERNS = ['not authorized', 'unauthorized', 'authentication', 'invalid oauth', 'forbidden'];
@@ -151,18 +153,31 @@ const GQL_STALE_QUERY_COOLDOWN_MS = 5 * 60_000;
 const GQL_STALE_QUERY_COOLDOWN_MAX_MS = 30 * 60_000;
 const GQL_WARNING_INTERVAL_MS = 5 * 60_000;
 const VERSION_RETRY_INTERVAL_MS = 60_000;
+const HTTP_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const parseRetryAfterMs = (value: string | null, nowMs = Date.now()): number => {
 	if (!value?.trim()) return 0;
 	const trimmed = value.trim();
-	if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+	if (/^\d+$/.test(trimmed)) {
 		const delay = Number(trimmed) * 1000;
 		return Number.isFinite(delay) ? delay : 0;
 	}
-	// Do not let Date.parse interpret malformed delta-seconds as calendar dates.
-	if (!/[a-z]/i.test(trimmed)) return 0;
-	const date = Date.parse(trimmed);
-	return Number.isFinite(date) ? Math.max(0, date - nowMs) : 0;
+	// Round-trip the HTTP date formats: Date.parse alone also accepts unrelated
+	// inputs such as fractional numbers, ISO dates, and invalid calendar dates.
+	const date = new Date(trimmed.endsWith(' GMT') ? trimmed : `${trimmed} GMT`);
+	if (!Number.isFinite(date.getTime())) return 0;
+	if (trimmed.indexOf(',') > 3) {
+		// RFC 850 dates use two-digit years, interpreted relative to the current year.
+		const currentYear = new Date(nowMs).getUTCFullYear();
+		const resolvedYear = currentYear - currentYear % 100 + date.getUTCFullYear() % 100;
+		date.setUTCFullYear(resolvedYear > currentYear + 50 ? resolvedYear - 100 : resolvedYear);
+	}
+	const utc = date.toUTCString();
+	const [weekday, day, month, year, time] = utc.split(' ');
+	const asctime = `${weekday.slice(0, -1)} ${month} ${String(Number(day)).padStart(2, ' ')} ${time} ${year}`;
+	const rfc850 = `${HTTP_WEEKDAYS[date.getUTCDay()]}, ${day}-${month}-${year.slice(-2)} ${time} GMT`;
+	if (trimmed !== utc && trimmed !== asctime && trimmed !== rfc850) return 0;
+	return Math.max(0, date.getTime() - nowMs);
 };
 
 const normalizeErrorMessage = (message: string) => message.trim().toLowerCase();
@@ -193,12 +208,10 @@ export function classifyGqlErrors(errors: GqlError[]): GqlErrorSummary {
 	const categories = errors.map(({ message }) => {
 		const normalized = normalizeErrorMessage(message);
 		if (AUTH_GQL_MESSAGE_PATTERNS.some((pattern) => normalized.includes(pattern))) return 'auth';
-		if (normalized.includes(PERSISTED_QUERY_NOT_FOUND)) return 'stale_query';
+		if (normalized === PERSISTED_QUERY_NOT_FOUND) return 'stale_query';
 		if (
 			RETRYABLE_GQL_MESSAGES[normalized] === true ||
-			normalized.includes('persistedqueryunavailable') ||
-			/\bsubgraph\b.*\b(error|unavailable|timeout|failed|failure)\b/.test(normalized) ||
-			/\b(error|failed|failure)\b.*\bsubgraph\b/.test(normalized)
+			normalized.startsWith("failed to fetch from subgraph '")
 		) return 'transient';
 		return 'fatal';
 	});
@@ -211,6 +224,29 @@ export function classifyGqlErrors(errors: GqlError[]): GqlErrorSummary {
 		persistedQueryNotFound: category === 'stale_query',
 		messages: summarizeGqlErrors(errors)
 	};
+}
+
+async function findSettingsScript(response: Response): Promise<URL | null> {
+	let settingsUrl: URL | null = null;
+	const rewriter = new HTMLRewriter().on('script[src]', {
+		element(element) {
+			if (settingsUrl) return;
+			const src = element.getAttribute('src');
+			if (!src) return;
+			const url = URL.parse(decodeHTMLAttribute(src), response.url || 'https://www.twitch.tv');
+			if (
+				url?.protocol === 'https:' &&
+				(url.hostname === 'static.twitchcdn.net' || url.hostname === 'assets.twitch.tv') &&
+				url.pathname.startsWith('/config/settings') &&
+				url.pathname.endsWith('.js')
+			) {
+				settingsUrl = url;
+			}
+		}
+	});
+	// Consume the parser output without retaining a second copy of the page.
+	await rewriter.transform(response).body?.pipeTo(new WritableStream());
+	return settingsUrl;
 }
 
 export class TwitchClient {
@@ -679,17 +715,13 @@ export class TwitchClient {
 				logger.error({ status: pageResponse.status }, 'Failed to fetch twitch.tv for spade URL');
 				return this.spadeUrl;
 			}
-			const pageHtml = await pageResponse.text();
-
-			const settingsMatch = pageHtml.match(
-				/(https:\/\/static\.twitchcdn\.net\/config\/settings.*?js|https:\/\/assets\.twitch\.tv\/config\/settings.*?\.js)/
-			);
-			if (!settingsMatch) {
+			const settingsUrl = await findSettingsScript(pageResponse);
+			if (!settingsUrl) {
 				logger.error('Could not find settings JS URL in twitch.tv page');
 				return this.spadeUrl;
 			}
 
-			const settingsResponse = await fetch(settingsMatch[1], { headers, signal: fetchTimeout() });
+			const settingsResponse = await fetch(settingsUrl, { headers, signal: fetchTimeout() });
 			if (!settingsResponse.ok) {
 				logger.error({ status: settingsResponse.status }, 'Failed to fetch settings JS');
 				return this.spadeUrl;

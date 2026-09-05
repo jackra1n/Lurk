@@ -4,7 +4,12 @@ import { AsyncRateLimiter } from './rate-limiter';
 import { classifyGqlErrors, parseRetryAfterMs, TwitchClient, type StreamInfoStatus } from './index';
 
 const streamOperation = GQL_OPERATIONS.VideoPlayerStreamInfoOverlayChannel.operationName;
-const liveData = { user: { stream: { id: 'broadcast', title: 'Live', game: null, freeformTags: [], viewersCount: 42 } } };
+const liveData = {
+	user: {
+		broadcastSettings: { title: 'Live', game: { displayName: 'Just Chatting' } },
+		stream: { id: 'broadcast', viewersCount: 42, tags: [] }
+	}
+};
 const gqlError = (message: string) => Response.json({ errors: [{ message }] });
 
 interface ClientInternals {
@@ -59,6 +64,19 @@ function retryAt(status: StreamInfoStatus): number {
 }
 
 describe('operation-scoped GQL recovery', () => {
+	test('maps the observed Twitch response with metadata in broadcastSettings', async () => {
+		respond = () => Response.json({ data: liveData });
+		expect(await client.getStreamInfoStatus('alpha')).toMatchObject({
+			kind: 'live',
+			info: {
+				broadcastId: 'broadcast',
+				title: 'Live',
+				game: { displayName: 'Just Chatting' },
+				viewersCount: 42
+			}
+		});
+	});
+
 	test('bounds retries across channels, permits unrelated reads, and elects one recovery probe', async () => {
 		const failed = await client.getStreamInfoStatus('alpha');
 		expect(requests).toEqual(Array(4).fill(streamOperation));

@@ -68,7 +68,6 @@ export interface StreamInfo {
 	broadcastId: string;
 	title: string;
 	game: { displayName: string } | null;
-	tags: { localizedName: string }[];
 	viewersCount: number;
 }
 
@@ -616,11 +615,12 @@ export class TwitchClient {
 
 		interface StreamInfoResponse {
 			user: {
-				stream: {
-					id: string;
+				broadcastSettings: {
 					title: string;
 					game: { displayName: string } | null;
-					freeformTags: { name: string }[];
+				};
+				stream: {
+					id: string;
 					viewersCount: number;
 				} | null;
 			} | null;
@@ -640,16 +640,14 @@ export class TwitchClient {
 			};
 		}
 
-		const stream = response.data?.user?.stream;
+		const user = response.data?.user;
+		const stream = user?.stream;
 		if (stream === null) return { kind: 'offline' };
 		if (
 			!stream || typeof stream.id !== 'string' || !stream.id ||
-			typeof stream.title !== 'string' || !Number.isFinite(stream.viewersCount) ||
-			(stream.game !== null && (!stream.game || typeof stream.game.displayName !== 'string')) ||
-			(stream.freeformTags !== undefined && (!Array.isArray(stream.freeformTags) ||
-				stream.freeformTags.some((tag) => !tag || typeof tag.name !== 'string')))
+			!Number.isFinite(stream.viewersCount) || typeof user?.broadcastSettings?.title !== 'string'
 		) {
-			logger.error({ operation: GQL_OPERATIONS.VideoPlayerStreamInfoOverlayChannel.operationName }, 'Invalid stream info response');
+			logger.error({ channelLogin }, 'Invalid stream info response');
 			return {
 				kind: 'unknown',
 				reason: 'gql_error',
@@ -662,9 +660,8 @@ export class TwitchClient {
 			kind: 'live',
 			info: {
 				broadcastId: stream.id,
-				title: stream.title,
-				game: stream.game,
-				tags: (stream.freeformTags || []).map((t) => ({ localizedName: t.name })),
+				title: user.broadcastSettings.title,
+				game: user.broadcastSettings.game,
 				viewersCount: stream.viewersCount
 			}
 		};

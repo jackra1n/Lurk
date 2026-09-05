@@ -397,7 +397,7 @@ describe('stream metadata scheduling', () => {
 			expect(state.metadata.lastFailureAtMs).toBe(Date.now());
 			statusSpy.mockResolvedValue({
 				kind: 'live',
-				info: { broadcastId: 'known-broadcast', title: 'new title', game: null, tags: [], viewersCount: 50 }
+				info: { broadcastId: 'known-broadcast', title: 'new title', game: null, viewersCount: 50 }
 			});
 			vi.advanceTimersByTime(60_000);
 			await checkStreamerOnline(state);
@@ -428,7 +428,7 @@ describe('stream metadata scheduling', () => {
 			handlePubSubMessage(deps, 'video-playback-by-id.alpha-id', 'stream-down', {});
 			result.resolve({
 				kind: 'live',
-				info: { broadcastId: 'obsolete', title: 'obsolete', game: null, tags: [], viewersCount: 50 }
+				info: { broadcastId: 'obsolete', title: 'obsolete', game: null, viewersCount: 50 }
 			});
 			await pending;
 			expect(state.isLive).toBe(false);
@@ -462,7 +462,7 @@ describe('stream metadata scheduling', () => {
 			expect(statusSpy).toHaveBeenCalledTimes(1);
 			oldResult.resolve({
 				kind: 'live',
-				info: { broadcastId: 'obsolete', title: 'obsolete', game: null, tags: [], viewersCount: 50 }
+				info: { broadcastId: 'obsolete', title: 'obsolete', game: null, viewersCount: 50 }
 			});
 			await checkStreamerOnline(state);
 			expect(state.isLive).toBe(false);
@@ -473,7 +473,7 @@ describe('stream metadata scheduling', () => {
 			expect(state.metadata.status).toBe('fresh');
 			statusSpy.mockResolvedValue({
 				kind: 'live',
-				info: { broadcastId: 'current', title: 'current', game: null, tags: [], viewersCount: 75 }
+				info: { broadcastId: 'current', title: 'current', game: null, viewersCount: 75 }
 			});
 			vi.advanceTimersByTime(2 * 60_000);
 			await checkStreamerOnline(state);

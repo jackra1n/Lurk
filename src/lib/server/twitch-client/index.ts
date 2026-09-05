@@ -155,19 +155,10 @@ const GQL_WARNING_INTERVAL_MS = 5 * 60_000;
 const VERSION_RETRY_INTERVAL_MS = 60_000;
 const HTTP_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export const parseRetryAfterMs = (value: string | null, nowMs = Date.now()): number => {
-	if (!value?.trim()) return 0;
-	const trimmed = value.trim();
-	if (/^\d+$/.test(trimmed)) {
-		const delay = Number(trimmed) * 1000;
-		return Number.isFinite(delay) ? delay : 0;
-	}
-	// Round-trip the HTTP date formats: Date.parse alone also accepts unrelated
-	// inputs such as fractional numbers, ISO dates, and invalid calendar dates.
-	const date = new Date(trimmed.endsWith(' GMT') ? trimmed : `${trimmed} GMT`);
-	if (!Number.isFinite(date.getTime())) return 0;
-	if (trimmed.indexOf(',') > 3) {
-		// RFC 850 dates use two-digit years, interpreted relative to the current year.
+function parseHttpDate(value: string, nowMs: number): number | null {
+	const date = new Date(value.endsWith(' GMT') ? value : `${value} GMT`);
+	if (!Number.isFinite(date.getTime())) return null;
+	if (value.indexOf(',') > 3) {
 		const currentYear = new Date(nowMs).getUTCFullYear();
 		const resolvedYear = currentYear - currentYear % 100 + date.getUTCFullYear() % 100;
 		date.setUTCFullYear(resolvedYear > currentYear + 50 ? resolvedYear - 100 : resolvedYear);
@@ -176,8 +167,19 @@ export const parseRetryAfterMs = (value: string | null, nowMs = Date.now()): num
 	const [weekday, day, month, year, time] = utc.split(' ');
 	const asctime = `${weekday.slice(0, -1)} ${month} ${String(Number(day)).padStart(2, ' ')} ${time} ${year}`;
 	const rfc850 = `${HTTP_WEEKDAYS[date.getUTCDay()]}, ${day}-${month}-${year.slice(-2)} ${time} GMT`;
-	if (trimmed !== utc && trimmed !== asctime && trimmed !== rfc850) return 0;
-	return Math.max(0, date.getTime() - nowMs);
+	if (value !== utc && value !== asctime && value !== rfc850) return null;
+	return date.getTime();
+}
+
+export const parseRetryAfterMs = (value: string | null, nowMs = Date.now()): number => {
+	if (!value?.trim()) return 0;
+	const trimmed = value.trim();
+	if (/^\d+$/.test(trimmed)) {
+		const delay = Number(trimmed) * 1000;
+		return Number.isFinite(delay) ? delay : 0;
+	}
+	const dateMs = parseHttpDate(trimmed, nowMs);
+	return dateMs === null ? 0 : Math.max(0, dateMs - nowMs);
 };
 
 const normalizeErrorMessage = (message: string) => message.trim().toLowerCase();

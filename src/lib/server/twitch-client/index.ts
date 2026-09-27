@@ -259,6 +259,7 @@ export class TwitchClient {
 	private lastVersionAttempt = -Infinity;
 	private versionFetch: Promise<string> | null = null;
 	private readonly gqlRecovery = new Map<string, GqlRecoveryState>();
+	private readonly missingUsers = new Set<string>();
 	spadeUrl: string | null = null;
 	lastSpadeUrlFetch = 0;
 	lastSpadeUrlAttempt = 0;
@@ -542,7 +543,10 @@ export class TwitchClient {
 
 		const userId = response.data?.user?.id;
 		if (!userId) {
-			logger.info({ login }, 'User not found');
+			if (!this.missingUsers.has(login.toLowerCase())) {
+				this.missingUsers.add(login.toLowerCase());
+				logger.info({ login }, 'User not found');
+			}
 			return null;
 		}
 

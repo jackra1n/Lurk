@@ -245,12 +245,14 @@ describe('operation-scoped GQL recovery', () => {
 	});
 
 	test('missing or malformed stream data stays unknown; only explicit null is offline', async () => {
-		for (const data of [undefined, null, {}, { user: null }, { user: {} }, { user: { stream: {} } }]) {
+		for (const data of [undefined, null, {}, { user: {} }, { user: { stream: {} } }]) {
 			respond = () => Response.json({ data });
 			expect((await client.getStreamInfoStatus('alpha')).kind).toBe('unknown');
 		}
-		respond = () => Response.json({ data: { user: { stream: null } } });
-		expect(await client.getStreamInfoStatus('alpha')).toEqual({ kind: 'offline' });
+		for (const data of [{ user: null }, { user: { stream: null } }]) {
+			respond = () => Response.json({ data });
+			expect(await client.getStreamInfoStatus('alpha')).toEqual({ kind: 'offline' });
+		}
 	});
 });
 

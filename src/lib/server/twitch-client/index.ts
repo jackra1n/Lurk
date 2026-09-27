@@ -642,7 +642,7 @@ export class TwitchClient {
 
 		const user = response.data?.user;
 		const stream = user?.stream;
-		if (stream === null) return { kind: 'offline' };
+		if (user === null || stream === null) return { kind: 'offline' };
 		if (
 			!stream || typeof stream.id !== 'string' || !stream.id ||
 			!Number.isFinite(stream.viewersCount) || typeof user?.broadcastSettings?.title !== 'string'

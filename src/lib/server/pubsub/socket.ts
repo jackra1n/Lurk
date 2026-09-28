@@ -96,19 +96,11 @@ export class PubSubSocket {
       };
 
       ws.onclose = () => {
-        const wasConnected = this.isConnected;
-        this.isConnected = false;
-        this.stopPingLoop();
-        this.subscribedTopics.clear();
-        this.rejectPendingListens('Socket closed');
+        if (this.ws !== ws) return;
+        this.markDisconnected('Socket closed');
         this.ws = null;
 
-        if (wasConnected) {
-          logger.info({ socketId: this.id }, 'Connection closed');
-          this.onDisconnectedForward(this.id);
-        }
-
-        if (!wasConnected && !settled) {
+        if (!settled) {
           settle(() => reject(new Error('Socket closed before connect')));
         }
 
@@ -123,16 +115,14 @@ export class PubSubSocket {
 
   disconnect() {
     this.forcedClose = true;
-    this.stopPingLoop();
+    this.markDisconnected('Socket disconnected');
     this.clearReconnectTimer();
-    this.rejectPendingListens('Socket disconnected');
 
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
 
-    this.isConnected = false;
     this.connectPromise = null;
     this.topicAuthByName.clear();
     this.subscribedTopics.clear();
@@ -310,9 +300,21 @@ export class PubSubSocket {
     }
   }
 
+  private markDisconnected(reason: string) {
+    const wasConnected = this.isConnected;
+    this.isConnected = false;
+    this.stopPingLoop();
+    this.subscribedTopics.clear();
+    this.rejectPendingListens(reason);
+    if (wasConnected) {
+      logger.info({ socketId: this.id }, 'Connection closed');
+      this.onDisconnectedForward(this.id);
+    }
+  }
+
   private handleReconnect() {
     if (this.forcedClose) return;
-    this.isConnected = false;
+    this.markDisconnected('Socket reconnecting');
     if (this.ws) {
       this.ws.close();
       this.ws = null;

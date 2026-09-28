@@ -28,8 +28,9 @@ export class TwitchPubSubPool {
   private connectedSocketIds = new Set<number>();
   private nextSocketId = 1;
   private desiredSubscriptions = new Map<string, DesiredSubscription>();
-  private subscriptionRetryInterval: NodeJS.Timeout | undefined;
+  private subscriptionRetryInterval: ReturnType<typeof setInterval> | undefined;
   private subscriptionRetry: Promise<void> | null = null;
+  private socketReplays = new Map<number, object>();
   private generation = 0;
 
   private onMessageHandler: MessageHandler | null = null;
@@ -68,6 +69,7 @@ export class TwitchPubSubPool {
     clearInterval(this.subscriptionRetryInterval);
     this.subscriptionRetryInterval = undefined;
     this.subscriptionRetry = null;
+    this.socketReplays.clear();
     this.desiredSubscriptions.clear();
     for (const socket of this.sockets.values()) {
       socket.disconnect();
@@ -79,7 +81,7 @@ export class TwitchPubSubPool {
     this.nextSocketId = 1;
   }
 
-  /** Failed attempts retain subscription intent until disconnect. */
+  /** Retry failures until disconnect; reconnects replay immediately with fresh backoff. */
   listen(topic: string, requiresAuth: boolean = false): Promise<void> {
     let desired = this.desiredSubscriptions.get(topic);
     if (!desired) {
@@ -138,6 +140,7 @@ export class TwitchPubSubPool {
       const [topic, desired] = entry;
       if (desired.pending || desired.retryAtMs > now) continue;
       const socketId = this.topicToSocketId.get(topic);
+      if (socketId !== undefined && this.socketReplays.has(socketId)) continue;
       const socket = socketId === undefined ? undefined : this.sockets.get(socketId);
       if (socket && (!socket.isConnectedToPubSub() || socket.isSubscribed(topic, desired.requiresAuth))) continue;
       if (!next || desired.retryAtMs < next[1].retryAtMs) next = entry;
@@ -261,12 +264,39 @@ export class TwitchPubSubPool {
     const previousCount = this.connectedSocketIds.size;
     this.connectedSocketIds.add(socketId);
 
+    void this.replaySubscriptions(socketId);
     if (previousCount === 0 && this.connectedSocketIds.size > 0) {
       this.onConnectedHandler?.();
     }
   }
 
+  private async replaySubscriptions(socketId: number): Promise<void> {
+    const replay = {};
+    this.socketReplays.set(socketId, replay);
+    try {
+      for (const [topic, assignedSocketId] of this.topicToSocketId) {
+        if (assignedSocketId !== socketId) continue;
+        const desired = this.desiredSubscriptions.get(topic);
+        if (!desired) continue;
+        await desired.pending?.catch(() => {});
+        if (this.socketReplays.get(socketId) !== replay) return;
+        desired.failures = 0;
+        desired.retryAtMs = 0;
+        desired.error = null;
+        try {
+          await this.subscribe(topic, desired);
+        } catch (error) {
+          if (this.socketReplays.get(socketId) !== replay) return;
+          logger.warn({ socketId, topic, err: error }, 'Subscription replay failed');
+        }
+      }
+    } finally {
+      if (this.socketReplays.get(socketId) === replay) this.socketReplays.delete(socketId);
+    }
+  }
+
   private handleSocketDisconnected(socketId: number) {
+    this.socketReplays.delete(socketId);
     const previousCount = this.connectedSocketIds.size;
     this.connectedSocketIds.delete(socketId);
 

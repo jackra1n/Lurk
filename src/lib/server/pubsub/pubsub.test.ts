@@ -14,6 +14,8 @@ class FakeWebSocket {
 
   static rejectListens = false;
   static holdListens = false;
+  static respondToPings = true;
+  static delayClose = false;
   onopen: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onclose: ((event: CloseEvent) => void) | null = null;
@@ -21,6 +23,7 @@ class FakeWebSocket {
   readyState = FakeWebSocket.CONNECTING;
   readonly listenTopics: string[] = [];
   readonly listenAuthTokens: Array<string | undefined> = [];
+  readonly pendingReplies: Array<() => void> = [];
 
   constructor(readonly url: string) {
     FakeWebSocket.instances.push(this);
@@ -40,8 +43,7 @@ class FakeWebSocket {
     if (message.type === 'LISTEN' && message.nonce && message.data?.topics?.[0]) {
       this.listenTopics.push(message.data.topics[0]);
       this.listenAuthTokens.push(message.data.auth_token);
-      if (FakeWebSocket.holdListens) return;
-      queueMicrotask(() => {
+      const respond = () => {
         const response: PubSubMessage = {
           type: 'RESPONSE',
           nonce: message.nonce,
@@ -49,11 +51,13 @@ class FakeWebSocket {
         };
         FakeWebSocket.failNextListen = false;
         this.onmessage?.({ data: JSON.stringify(response) } as MessageEvent<string>);
-      });
+      };
+      if (FakeWebSocket.holdListens) this.pendingReplies.push(respond);
+      else queueMicrotask(respond);
       return;
     }
 
-    if (message.type === 'PING') {
+    if (message.type === 'PING' && FakeWebSocket.respondToPings) {
       queueMicrotask(() => {
         this.onmessage?.({ data: JSON.stringify({ type: 'PONG' }) } as MessageEvent<string>);
       });
@@ -61,6 +65,12 @@ class FakeWebSocket {
   }
 
   close() {
+    if (this.readyState >= FakeWebSocket.CLOSING) return;
+    this.readyState = FakeWebSocket.CLOSING;
+    if (!FakeWebSocket.delayClose) this.finishClose();
+  }
+
+  finishClose() {
     if (this.readyState === FakeWebSocket.CLOSED) return;
     this.readyState = FakeWebSocket.CLOSED;
     this.onclose?.({} as CloseEvent);
@@ -71,6 +81,8 @@ class FakeWebSocket {
     FakeWebSocket.failNextListen = false;
     FakeWebSocket.rejectListens = false;
     FakeWebSocket.holdListens = false;
+    FakeWebSocket.respondToPings = true;
+    FakeWebSocket.delayClose = false;
   }
 }
 
@@ -263,4 +275,173 @@ describe('TwitchPubSub pool', () => {
       vi.useRealTimers();
     }
   });
+
+  test('replays 350 streamers independently per socket without timer gaps or fallback overlap', async () => {
+    vi.useFakeTimers();
+    const pubsub = createPubSub();
+    try {
+      await pubsub.connect();
+      pubsub.setAuthToken('old-token');
+      await pubsub.listen('community-points-user-v1.scale', true);
+      for (let i = 0; i < 350; i++) await pubsub.listen(`video-playback-by-id.${i}`);
+      const originals = [...FakeWebSocket.instances];
+      FakeWebSocket.holdListens = true;
+      pubsub.setAuthToken('new-token');
+      for (const ws of originals) ws.close();
+      await advanceTime(1);
+      const replacements = FakeWebSocket.instances.slice(originals.length);
+      expect(replacements).toHaveLength(originals.length);
+      expect(replacements.map((ws) => ws.listenTopics.length)).toEqual(originals.map(() => 1));
+      await advanceTime(1_000);
+      expect(replacements.map((ws) => ws.listenTopics.length)).toEqual(originals.map(() => 1));
+      const replayTime = Date.now();
+      for (let i = 0; i < 45; i++) {
+        for (const ws of replacements.slice(1)) ws.pendingReplies.shift()?.();
+        await setImmediate();
+      }
+      expect(replacements[0].listenTopics).toEqual([originals[0].listenTopics[0]]);
+      for (let i = 1; i < replacements.length; i++) {
+        expect(replacements[i].listenTopics).toEqual(originals[i].listenTopics);
+      }
+      for (let i = 0; i < 45; i++) {
+        replacements[0].pendingReplies.shift()?.();
+        await setImmediate();
+      }
+      expect(replacements[0].listenTopics).toEqual(originals[0].listenTopics);
+      expect(replacements[0].listenAuthTokens[0]).toBe('new-token');
+      expect(Date.now()).toBe(replayTime);
+    } finally {
+      pubsub.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  test('continues replay after a rejection and leaves only the failed topic to backoff', async () => {
+    vi.useFakeTimers();
+    const pubsub = createPubSub();
+    const topics = ['video-playback-by-id.first', 'video-playback-by-id.second'];
+    try {
+      await pubsub.connect();
+      for (const topic of topics) await pubsub.listen(topic);
+      FakeWebSocket.failNextListen = true;
+      FakeWebSocket.instances[0].close();
+      await advanceTime(1);
+      const replacement = FakeWebSocket.instances[1];
+      expect(replacement.listenTopics).toEqual(topics);
+      await advanceTime(29_000);
+      expect(replacement.listenTopics).toEqual(topics);
+      await advanceTime(2_000);
+      expect(replacement.listenTopics).toEqual([...topics, topics[0]]);
+    } finally {
+      pubsub.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  test('resets accumulated retry deadlines and failures when the assigned socket reconnects', async () => {
+    vi.useFakeTimers();
+    const pubsub = createPubSub();
+    const topic = 'video-playback-by-id.backoff';
+    try {
+      await pubsub.connect();
+      await pubsub.listen(topic);
+      FakeWebSocket.rejectListens = true;
+      FakeWebSocket.instances[0].close();
+      await advanceTime(1);
+      await advanceTime(31_000);
+      await advanceTime(61_000);
+      expect(FakeWebSocket.instances[1].listenTopics).toEqual([topic, topic, topic]);
+      FakeWebSocket.instances[1].close();
+      await advanceTime(1);
+      const replacement = FakeWebSocket.instances[2];
+      expect(replacement.listenTopics).toEqual([topic]);
+      await advanceTime(29_000);
+      expect(replacement.listenTopics).toEqual([topic]);
+      FakeWebSocket.rejectListens = false;
+      await advanceTime(2_000);
+      expect(replacement.listenTopics).toEqual([topic, topic]);
+    } finally {
+      pubsub.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  test('restarts interrupted replay without duplicate requests or reviving it after shutdown', async () => {
+    vi.useFakeTimers();
+    const pubsub = createPubSub();
+    const topics = ['video-playback-by-id.first', 'video-playback-by-id.second'];
+    try {
+      await pubsub.connect();
+      for (const topic of topics) await pubsub.listen(topic);
+      FakeWebSocket.holdListens = true;
+      FakeWebSocket.instances[0].close();
+      await advanceTime(1);
+      const interrupted = FakeWebSocket.instances[1];
+      expect(interrupted.listenTopics).toEqual([topics[0]]);
+      interrupted.close();
+      FakeWebSocket.holdListens = false;
+      await advanceTime(1);
+      interrupted.pendingReplies.shift()?.();
+      await setImmediate();
+      expect(interrupted.listenTopics).toEqual([topics[0]]);
+      expect(FakeWebSocket.instances[2].listenTopics).toEqual(topics);
+      FakeWebSocket.holdListens = true;
+      FakeWebSocket.instances[2].close();
+      await advanceTime(1);
+      const stopped = FakeWebSocket.instances[3];
+      expect(stopped.listenTopics).toEqual([topics[0]]);
+      pubsub.disconnect();
+      stopped.pendingReplies.shift()?.();
+      await advanceTime(300_000);
+      expect(stopped.listenTopics).toEqual([topics[0]]);
+      expect(FakeWebSocket.instances).toHaveLength(4);
+      expect(pubsub.getTopics()).toEqual([]);
+    } finally {
+      pubsub.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  test.each(['server', 'heartbeat'])(
+    'reports %s reconnects before close completes without duplicate disconnects',
+    async (reason) => {
+      vi.useFakeTimers();
+      const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+      const pubsub = new TwitchPubSubPool({
+        reconnectDelayRangeMs: [10_000, 10_000],
+        socketFactory: (url) => new FakeWebSocket(url)
+      });
+      const states: boolean[] = [];
+      pubsub.onConnected(() => states.push(pubsub.isConnectedToPubSub()));
+      pubsub.onDisconnected(() => states.push(pubsub.isConnectedToPubSub()));
+      try {
+        await pubsub.connect();
+        await pubsub.listen('video-playback-by-id.status');
+        const original = FakeWebSocket.instances[0];
+        FakeWebSocket.delayClose = true;
+        if (reason === 'server') {
+          original.onmessage?.({ data: JSON.stringify({ type: 'RECONNECT' }) } as MessageEvent<string>);
+        } else {
+          FakeWebSocket.respondToPings = false;
+          await advanceTime(325_000);
+        }
+        expect(pubsub.isConnectedToPubSub()).toBe(false);
+        expect(states).toEqual([true, false]);
+        await advanceTime(10_000);
+        expect(pubsub.isConnectedToPubSub()).toBe(true);
+        expect(states).toEqual([true, false, true]);
+        original.finishClose();
+        expect(pubsub.isConnectedToPubSub()).toBe(true);
+        expect(states).toEqual([true, false, true]);
+        expect(FakeWebSocket.instances[1].listenTopics).toEqual(['video-playback-by-id.status']);
+        pubsub.disconnect();
+        FakeWebSocket.instances[1].finishClose();
+        expect(states).toEqual([true, false, true, false]);
+      } finally {
+        pubsub.disconnect();
+        random.mockRestore();
+        vi.useRealTimers();
+      }
+    }
+  );
 });

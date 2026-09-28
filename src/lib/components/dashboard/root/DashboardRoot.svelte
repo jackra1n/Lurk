@@ -279,6 +279,7 @@
 
   const fetchChannelPointsAnalytics = async () => {
     syncRollingAnalyticsRangeToNow();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Request-local params are serialized immediately, not rendered state.
     const query = new URLSearchParams({
       from: String(analyticsRangeFromMs),
       to: String(analyticsRangeToMs),

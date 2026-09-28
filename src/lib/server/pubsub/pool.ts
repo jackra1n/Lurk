@@ -108,7 +108,7 @@ export class TwitchPubSubPool {
       this.topicToSocketId.set(topic, fallbackSocket.getId());
       logger.info({ socketId: fallbackSocket.getId(), topic }, 'Subscribed to topic (fallback)');
     } catch (error) {
-      throw new Error(`Failed to subscribe topic after fallback: ${topic} (${String(error)})`);
+      throw new Error(`Failed to subscribe topic after fallback: ${topic} (${String(error)})`, { cause: error });
     }
   }
 

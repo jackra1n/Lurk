@@ -27,7 +27,7 @@
   let { events = [] }: { events?: RecentEventItem[] } = $props();
 
   let eventsViewport = $state<HTMLElement | null>(null);
-  let visibleEventsCount = $state(0);
+  let visibleEventsCount = $derived(Math.min(initialVisibleEvents, events.length));
 
   const formatRelativeTime = (timestampMs: number) => {
     const diffMs = Math.max(0, Date.now() - timestampMs);
@@ -80,10 +80,6 @@
     if (remainingScrollPx > lazyLoadThresholdPx) return;
     visibleEventsCount = Math.min(events.length, visibleEventsCount + visibleEventsStep);
   };
-
-  $effect(() => {
-    visibleEventsCount = Math.min(initialVisibleEvents, events.length);
-  });
 
   $effect(() => {
     const viewport = eventsViewport;

@@ -5,7 +5,7 @@ export interface StreamData {
 	title: string | null;
 	game: string | null;
 	viewers: number;
-	spadeUrl: string | null;
+	hlsPlaylistUrl: string | null;
 	streamUpAt: number; // PubSub stream-up timestamp, 0 = unset
 	onlineAt: number; // confirmed online, used for 30-second grace period
 	minuteWatched: number;
@@ -19,12 +19,32 @@ export function createDefaultStreamData(): StreamData {
 		title: null,
 		game: null,
 		viewers: 0,
-		spadeUrl: null,
+		hlsPlaylistUrl: null,
 		streamUpAt: 0,
 		onlineAt: 0,
 		minuteWatched: 0,
 		minuteWatchedTimestamp: 0,
 		watchStreakMissing: false
+	};
+}
+
+export interface StreamMetadataState {
+	status: 'unavailable' | 'fresh' | 'stale' | 'failed';
+	lastAttemptAtMs: number;
+	lastSuccessAtMs: number;
+	lastFailureAtMs: number;
+	nextCheckAtMs: number;
+	generation: number;
+}
+
+export function createDefaultStreamMetadataState(): StreamMetadataState {
+	return {
+		status: 'unavailable',
+		lastAttemptAtMs: 0,
+		lastSuccessAtMs: 0,
+		lastFailureAtMs: 0,
+		nextCheckAtMs: 0,
+		generation: 0
 	};
 }
 
@@ -38,6 +58,7 @@ export interface StreamerState {
 	startingPoints: number | null;
 	offlineAt: number; // confirmed offline, used for 60-second debounce
 	lastContextRefresh: number; // epoch ms
+	metadata: StreamMetadataState;
 	activeMultipliers: { factor: number }[];
 	history: Record<string, { counter: number; amount: number }>;
 	stream: StreamData;

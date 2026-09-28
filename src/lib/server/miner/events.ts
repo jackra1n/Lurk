@@ -13,6 +13,7 @@ import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
 import { setStreamerChannelPointsState } from '$lib/server/db/streamers';
 import { CHANNEL_POINTS_STATUS } from './channel-points-status';
+import { invalidateStreamMetadata } from './streamers';
 
 const logger = getLogger('Miner');
 
@@ -170,6 +171,13 @@ function handleVideoPlaybackMessage(
 	if (messageType === VideoPlaybackMessageType.StreamUp) {
 		// record timestamp but do NOT mark live yet -- wait for viewcount verification
 		streamer.stream.streamUpAt = Date.now();
+		// A new broadcast should be verified promptly, without bypassing outage backoff.
+		if (streamer.metadata.status !== 'failed') {
+			streamer.metadata.nextCheckAtMs = Math.min(
+				streamer.metadata.nextCheckAtMs,
+				streamer.stream.streamUpAt + 2 * 60_000
+			);
+		}
 		logger.debug({ streamer: streamer.name }, 'stream-up received, waiting for verification');
 	} else if (messageType === VideoPlaybackMessageType.StreamDown) {
 		const wasLive = streamer.isLive;
@@ -204,6 +212,7 @@ function handleVideoPlaybackMessage(
 
 		streamer.isLive = false;
 		streamer.offlineAt = Date.now();
+		invalidateStreamMetadata(streamer, streamer.offlineAt + 60_000);
 		streamer.stream = createDefaultStreamData();
 	} else if (messageType === VideoPlaybackMessageType.Viewcount) {
 		// update viewer count from PubSub data

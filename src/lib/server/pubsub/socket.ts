@@ -4,6 +4,18 @@ import type { PendingListen, PubSubSocketOptions } from './types';
 
 const logger = getLogger('PubSubSocket');
 
+const SUBSCRIPTION_RETRY_BASE_MS = 30_000;
+const SUBSCRIPTION_RETRY_MAX_MS = 5 * 60_000;
+
+interface TopicState {
+  requiresAuth: boolean;
+  subscribedAuth: boolean | null;
+  failures: number;
+  retryAtMs: number;
+  error: Error | null;
+  waiter: PromiseWithResolvers<void> | null;
+}
+
 export class PubSubSocket {
   private readonly id: number;
   private readonly maxTopics: number;
@@ -17,12 +29,13 @@ export class PubSubSocket {
   private ws: ReturnType<PubSubSocketOptions['socketFactory']> | null = null;
   private pingInterval: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-  private connectPromise: Promise<void> | null = null;
+  private connection: PromiseWithResolvers<void> | null = null;
+  private retryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private syncingSocket: ReturnType<PubSubSocketOptions['socketFactory']> | null = null;
   private lastPong = 0;
   private isConnected = false;
-  private forcedClose = false;
-  private topicAuthByName = new Map<string, boolean>();
-  private subscribedTopics = new Map<string, boolean>();
+  private disposed = false;
+  private topics = new Map<string, TopicState>();
   private pendingListens = new Map<string, PendingListen>();
 
   constructor(options: PubSubSocketOptions) {
@@ -40,118 +53,137 @@ export class PubSubSocket {
     return this.id;
   }
 
-  getTopicCount() {
-    return this.topicAuthByName.size;
-  }
-
   hasCapacity() {
-    return this.getTopicCount() < this.maxTopics;
+    return this.topics.size < this.maxTopics;
   }
 
   isConnectedToPubSub() {
     return this.isConnected;
   }
 
-  isSubscribed(topic: string, requiresAuth: boolean = false) {
-    return this.subscribedTopics.has(topic) && (!requiresAuth || this.subscribedTopics.get(topic) === true);
-  }
-
-  async connect() {
-    if (this.isConnected) return;
-    if (this.connectPromise) return this.connectPromise;
-
-    this.forcedClose = false;
-
-    this.connectPromise = new Promise((resolve, reject) => {
-      let settled = false;
-      const settle = (cb: () => void) => {
-        if (settled) return;
-        settled = true;
-        this.connectPromise = null;
-        cb();
-      };
-
-      logger.info({ socketId: this.id, url: PUBSUB_URL }, 'Connecting');
+  connect(): Promise<void> {
+    if (this.disposed) return Promise.reject(new Error('Socket disconnected'));
+    if (this.isConnected) return Promise.resolve();
+    if (this.connection) return this.connection.promise;
+    this.clearReconnectTimer();
+    const connection = Promise.withResolvers<void>();
+    this.connection = connection;
+    logger.info({ socketId: this.id, url: PUBSUB_URL }, 'Connecting');
+    try {
       const ws = this.socketFactory(PUBSUB_URL);
       this.ws = ws;
-
       ws.onopen = () => {
+        if (this.ws !== ws) return;
         this.isConnected = true;
+        for (const state of this.topics.values()) {
+          state.failures = 0;
+          state.retryAtMs = 0;
+          state.error = null;
+        }
+        this.connection = null;
+        connection.resolve();
         this.lastPong = Date.now();
         this.startPingLoop();
         this.onConnectedForward(this.id);
         logger.info({ socketId: this.id }, 'Connected');
-        settle(resolve);
+        void this.syncTopics();
       };
-
       ws.onmessage = (event) => {
-        this.handleMessage(event.data);
+        if (this.ws === ws) this.handleMessage(event.data);
       };
-
       ws.onerror = (event) => {
+        if (this.ws !== ws) return;
         logger.error({ socketId: this.id, err: event }, 'WebSocket error');
-        if (!this.isConnected) {
-          settle(() => reject(new Error('Failed to connect')));
-        }
+        this.markDisconnected('WebSocket error');
+        this.scheduleReconnect();
       };
-
       ws.onclose = () => {
         if (this.ws !== ws) return;
         this.markDisconnected('Socket closed');
-        this.ws = null;
-
-        if (!settled) {
-          settle(() => reject(new Error('Socket closed before connect')));
-        }
-
-        if (!this.forcedClose) {
-          this.scheduleReconnect();
-        }
+        this.scheduleReconnect();
       };
-    });
-
-    return this.connectPromise;
+    } catch (error) {
+      this.markDisconnected(String(error));
+      this.scheduleReconnect();
+    }
+    return connection.promise;
   }
 
   disconnect() {
-    this.forcedClose = true;
-    this.markDisconnected('Socket disconnected');
+    this.disposed = true;
     this.clearReconnectTimer();
-
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-
-    this.connectPromise = null;
-    this.topicAuthByName.clear();
-    this.subscribedTopics.clear();
+    this.markDisconnected('Socket disconnected');
+    this.topics.clear();
   }
 
-  async listen(topic: string, requiresAuth: boolean = false) {
-    const existingRequiresAuth = this.topicAuthByName.get(topic) === true;
-    const nextRequiresAuth = existingRequiresAuth || requiresAuth;
-    const wasKnownTopic = this.topicAuthByName.has(topic);
-
-    if (!wasKnownTopic && !this.hasCapacity()) {
-      throw new Error(`Socket ${this.id} reached topic capacity`);
+  /** Retain failed topics for retry; reconnects replay immediately with fresh backoff. */
+  listen(topic: string, requiresAuth: boolean = false): Promise<void> {
+    if (this.disposed) return Promise.reject(new Error('Socket disconnected'));
+    let state = this.topics.get(topic);
+    if (!state) {
+      if (!this.hasCapacity()) return Promise.reject(new Error(`Socket ${this.id} reached topic capacity`));
+      state = { requiresAuth, subscribedAuth: null, failures: 0, retryAtMs: 0, error: null, waiter: null };
+      this.topics.set(topic, state);
     }
+    state.requiresAuth ||= requiresAuth;
+    if (state.subscribedAuth === state.requiresAuth) return Promise.resolve();
+    if (state.error && state.retryAtMs > Date.now()) return Promise.reject(state.error);
+    const waiter = (state.waiter ??= Promise.withResolvers<void>());
+    if (this.isConnected) void this.syncTopics();
+    else if (!this.reconnectTimeout) void this.connect().catch(() => {});
+    return waiter.promise;
+  }
 
-    this.topicAuthByName.set(topic, nextRequiresAuth);
-
-    if (this.isSubscribed(topic, nextRequiresAuth)) return;
+  private async syncTopics(): Promise<void> {
     const ws = this.ws;
-
+    if (!ws || !this.isConnected || this.syncingSocket === ws) return;
+    this.syncingSocket = ws;
+    clearTimeout(this.retryTimeout ?? undefined);
+    this.retryTimeout = null;
     try {
-      await this.sendListen(topic, nextRequiresAuth);
-      if (this.ws !== ws || !this.isConnected) throw new Error('Socket changed while subscribing');
-      this.subscribedTopics.set(topic, nextRequiresAuth);
-    } catch (error) {
-      if (!wasKnownTopic) {
-        this.topicAuthByName.delete(topic);
+      for (const [topic, state] of this.topics) {
+        while (state.subscribedAuth !== state.requiresAuth && state.retryAtMs <= Date.now()) {
+          if (this.ws !== ws) return;
+          const requiresAuth = state.requiresAuth;
+          try {
+            await this.sendListen(topic, requiresAuth);
+            if (this.ws !== ws) return;
+            state.subscribedAuth = requiresAuth;
+            state.failures = 0;
+            state.retryAtMs = 0;
+            state.error = null;
+            if (state.subscribedAuth === state.requiresAuth) {
+              state.waiter?.resolve();
+              state.waiter = null;
+            }
+          } catch (error) {
+            if (this.ws !== ws) return;
+            state.failures++;
+            state.retryAtMs =
+              Date.now() +
+              Math.min(SUBSCRIPTION_RETRY_MAX_MS, SUBSCRIPTION_RETRY_BASE_MS * 2 ** Math.min(state.failures - 1, 4));
+            state.error = error instanceof Error ? error : new Error(String(error));
+            state.waiter?.reject(state.error);
+            state.waiter = null;
+            logger.warn({ socketId: this.id, topic, err: error }, 'Subscription failed');
+          }
+        }
       }
-      this.subscribedTopics.delete(topic);
-      throw error;
+    } finally {
+      if (this.ws === ws) {
+        this.syncingSocket = null;
+        this.scheduleTopicRetry();
+      }
+    }
+  }
+
+  private scheduleTopicRetry() {
+    let retryAtMs = Infinity;
+    for (const state of this.topics.values()) {
+      if (state.subscribedAuth !== state.requiresAuth) retryAtMs = Math.min(retryAtMs, state.retryAtMs);
+    }
+    if (Number.isFinite(retryAtMs)) {
+      this.retryTimeout = setTimeout(() => void this.syncTopics(), Math.max(0, retryAtMs - Date.now()));
     }
   }
 
@@ -301,11 +333,24 @@ export class PubSubSocket {
   }
 
   private markDisconnected(reason: string) {
+    const ws = this.ws;
+    this.ws = null;
     const wasConnected = this.isConnected;
     this.isConnected = false;
+    this.syncingSocket = null;
     this.stopPingLoop();
-    this.subscribedTopics.clear();
+    clearTimeout(this.retryTimeout ?? undefined);
+    this.retryTimeout = null;
+    const error = new Error(reason);
+    this.connection?.reject(error);
+    this.connection = null;
     this.rejectPendingListens(reason);
+    for (const state of this.topics.values()) {
+      state.subscribedAuth = null;
+      state.waiter?.reject(error);
+      state.waiter = null;
+    }
+    ws?.close();
     if (wasConnected) {
       logger.info({ socketId: this.id }, 'Connection closed');
       this.onDisconnectedForward(this.id);
@@ -313,17 +358,13 @@ export class PubSubSocket {
   }
 
   private handleReconnect() {
-    if (this.forcedClose) return;
+    if (this.disposed) return;
     this.markDisconnected('Socket reconnecting');
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
     this.scheduleReconnect();
   }
 
   private scheduleReconnect() {
-    if (this.forcedClose || this.reconnectTimeout) return;
+    if (this.disposed || this.reconnectTimeout) return;
 
     const [minDelay, maxDelay] = this.reconnectDelayRangeMs;
     const delay = minDelay + Math.random() * Math.max(0, maxDelay - minDelay);

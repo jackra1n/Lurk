@@ -28,6 +28,7 @@ export class MinerService {
 	private watchLoopGeneration = 0;
 	private metadataInterval: ReturnType<typeof setInterval> | null = null;
 	private metadataLoopGeneration = 0;
+	private metadataCheck: Promise<void> | null = null;
 	private starting = false;
 	private running = false;
 	private startedAt: Date | null = null;
@@ -40,6 +41,7 @@ export class MinerService {
 
 	private readonly TICK_INTERVAL = 30 * 60_000; // 30 minutes -- PubSub handles real-time events
 	private readonly WATCH_LOOP_INTERVAL = 20_000;
+	private readonly METADATA_CHECK_INTERVAL = 1_000;
 	private readonly MINUTE_WATCHED_INTERVAL = 59_000;
 	private readonly MAX_WATCHED_STREAMERS = 2;
 
@@ -144,9 +146,7 @@ export class MinerService {
 			streamerStates: this.streamerStates,
 			dedup: this.dedup,
 			claimBonus: (channelId, claimId, source) =>
-				claimBonus(this.streamerStates, channelId, claimId, source),
-			checkStreamerOnline: (state) =>
-				this.running ? checkStreamerOnline(state) : Promise.resolve()
+				claimBonus(this.streamerStates, channelId, claimId, source)
 		};
 	}
 
@@ -324,14 +324,25 @@ export class MinerService {
 	private startMetadataLoop(): void {
 		const generation = this.metadataLoopGeneration;
 		const refresh = () => {
-			if (!this.running || generation !== this.metadataLoopGeneration) return;
+			if (!this.running || generation !== this.metadataLoopGeneration || this.metadataCheck) return;
+			const now = Date.now();
+			let next: StreamerState | undefined;
 			for (const state of this.streamerStates.values()) {
-				// One shared in-flight request and due time per streamer, also used by PubSub.
-				void checkStreamerOnline(state);
+				if (
+					!state.channelId || state.metadata.nextCheckAtMs > now ||
+					(state.offlineAt > 0 && now - state.offlineAt < 60_000)
+				) continue;
+				if (!next || state.metadata.nextCheckAtMs < next.metadata.nextCheckAtMs) next = state;
 			}
+			if (!next) return;
+			// Admit one metadata check at a time, at most once per second. PubSub
+			// only advances due times, so neither startup nor event bursts flood GQL.
+			this.metadataCheck = checkStreamerOnline(next).finally(() => {
+				this.metadataCheck = null;
+			});
 		};
 		refresh();
-		this.metadataInterval = setInterval(refresh, this.WATCH_LOOP_INTERVAL);
+		this.metadataInterval = setInterval(refresh, this.METADATA_CHECK_INTERVAL);
 	}
 
 	private invalidateWatchLoop(): void {

@@ -17,6 +17,7 @@ interface WatchLoopInternals {
 	streamerStates: Map<string, StreamerState>;
 	watchedStreamerNames: Set<string>;
 	WATCH_LOOP_INTERVAL: number;
+	metadataCheck: Promise<void> | null;
 	startWatchLoop(): void;
 	invalidateWatchLoop(): void;
 	startMetadataLoop(): void;
@@ -250,6 +251,118 @@ describe('watch-path GQL requests', () => {
 });
 
 describe('stream metadata scheduling', () => {
+	test('discovers a live stream from viewcounts when stream-up was missed', async () => {
+		vi.useFakeTimers();
+		const state = streamer('missed-up', 0);
+		state.isLive = false;
+		const deps: EventHandlerDeps = {
+			streamerStates: new Map([[state.name, state]]),
+			dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
+			claimBonus: async () => {}
+		};
+		const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockResolvedValue({ kind: 'offline' });
+		const recordSpy = vi.spyOn(eventStore, 'recordEvent').mockImplementation(() => {});
+		try {
+			await checkStreamerOnline(state);
+			vi.advanceTimersByTime(60_000);
+			statusSpy.mockResolvedValue({
+				kind: 'live',
+				info: { broadcastId: 'recovered', title: 'Live', game: null, viewersCount: 42 }
+			});
+			handlePubSubMessage(deps, 'video-playback-by-id.missed-up-id', 'viewcount', { viewers: 42 });
+			await checkStreamerOnline(state);
+			expect(state.isLive).toBe(true);
+			expect(state.stream.broadcastId).toBe('recovered');
+		} finally {
+			statusSpy.mockRestore();
+			recordSpy.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
+	test('paces a large startup backlog without overlapping metadata requests', async () => {
+		vi.useFakeTimers();
+		const service = new MinerService();
+		const internals = service as unknown as WatchLoopInternals;
+		const states = Array.from({ length: 350 }, (_, i) => ({
+			...streamer(`channel-${i}`, 0),
+			isLive: false
+		}));
+		internals.running = true;
+		internals.streamerStates = new Map(states.map((state) => [state.name, state]));
+		const pending = Promise.withResolvers<StreamInfoStatus>();
+		const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockImplementation(() => pending.promise);
+		try {
+			internals.startMetadataLoop();
+			await Promise.resolve();
+			expect(statusSpy).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(5_000);
+			await Promise.resolve();
+			expect(statusSpy).toHaveBeenCalledTimes(1);
+			pending.resolve({ kind: 'offline' });
+			await internals.metadataCheck;
+			vi.advanceTimersByTime(999);
+			await Promise.resolve();
+			expect(statusSpy).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(1);
+			await internals.metadataCheck;
+			expect(statusSpy.mock.calls.map(([login]) => login)).toEqual(['channel-0', 'channel-1']);
+		} finally {
+			internals.running = false;
+			internals.invalidateMetadataLoop();
+			pending.resolve({ kind: 'offline' });
+			await checkStreamerOnline(states[0]);
+			statusSpy.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
+	test('keeps offline fallback quiet while bounding event-triggered rechecks and stream-down debounce', async () => {
+		vi.useFakeTimers();
+		const state = streamer('offline', 0);
+		state.isLive = false;
+		const deps: EventHandlerDeps = {
+			streamerStates: new Map([[state.name, state]]),
+			dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
+			claimBonus: async () => {}
+		};
+		const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockResolvedValue({ kind: 'offline' });
+		const viewcount = () =>
+			handlePubSubMessage(deps, 'video-playback-by-id.offline-id', 'viewcount', { viewers: 1 });
+		try {
+			await checkStreamerOnline(state);
+			vi.advanceTimersByTime(14 * 60_000);
+			await checkStreamerOnline(state);
+			expect(statusSpy).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(60_000);
+			await checkStreamerOnline(state);
+			expect(statusSpy).toHaveBeenCalledTimes(2);
+
+			vi.advanceTimersByTime(30_000);
+			viewcount();
+			await checkStreamerOnline(state);
+			expect(statusSpy).toHaveBeenCalledTimes(2);
+			vi.advanceTimersByTime(30_000);
+			viewcount();
+			await checkStreamerOnline(state);
+			expect(statusSpy).toHaveBeenCalledTimes(3);
+
+			vi.advanceTimersByTime(30_000);
+			handlePubSubMessage(deps, 'video-playback-by-id.offline-id', 'stream-down', {});
+			vi.advanceTimersByTime(30_000);
+			viewcount();
+			await checkStreamerOnline(state);
+			expect(statusSpy).toHaveBeenCalledTimes(3);
+			vi.advanceTimersByTime(30_000);
+			viewcount();
+			await checkStreamerOnline(state);
+			expect(statusSpy).toHaveBeenCalledTimes(4);
+		} finally {
+			statusSpy.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
 	test('recovers discovery after an outage instead of leaving the streamer without a channel ID', async () => {
 		const configured = getStreamers();
 		const original = [...configured];
@@ -331,8 +444,7 @@ describe('stream metadata scheduling', () => {
 		const deps: EventHandlerDeps = {
 			streamerStates: new Map([[state.name, state]]),
 			dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
-			claimBonus: async () => {},
-			checkStreamerOnline
+			claimBonus: async () => {}
 		};
 
 		try {
@@ -343,10 +455,12 @@ describe('stream metadata scheduling', () => {
 			const retryAtMs = Date.now() + 5 * 60_000;
 			result.resolve({ kind: 'unknown', reason: 'gql_error', retryAtMs });
 			await scheduled;
+			deps.dedup.lastMessageTimestamp = 0;
+			handlePubSubMessage(deps, 'video-playback-by-id.alpha-id', 'viewcount', { viewers: 43 });
 			await checkStreamerOnline(state);
 			expect(statusSpy).toHaveBeenCalledTimes(1);
 			expect(state.isLive).toBe(false);
-			expect(state.stream.viewers).toBe(42);
+			expect(state.stream.viewers).toBe(43);
 			expect(state.metadata.status).toBe('failed');
 			expect(state.metadata.nextCheckAtMs).toBe(retryAtMs);
 		} finally {
@@ -418,8 +532,7 @@ describe('stream metadata scheduling', () => {
 		const deps: EventHandlerDeps = {
 			streamerStates: new Map([[state.name, state]]),
 			dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
-			claimBonus: async () => {},
-			checkStreamerOnline
+			claimBonus: async () => {}
 		};
 
 		try {
@@ -475,7 +588,7 @@ describe('stream metadata scheduling', () => {
 				kind: 'live',
 				info: { broadcastId: 'current', title: 'current', game: null, viewersCount: 75 }
 			});
-			vi.advanceTimersByTime(2 * 60_000);
+			vi.advanceTimersByTime(15 * 60_000);
 			await checkStreamerOnline(state);
 			expect(state.isLive).toBe(true);
 			expect(state.stream.broadcastId).toBe('current');

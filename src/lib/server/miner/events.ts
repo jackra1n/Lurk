@@ -34,7 +34,6 @@ export interface EventHandlerDeps {
 	streamerStates: Map<string, StreamerState>;
 	dedup: MessageDedup;
 	claimBonus: (channelId: string, claimId: string, source: 'pubsub' | 'gql_context') => Promise<void>;
-	checkStreamerOnline: (state: StreamerState) => Promise<void>;
 }
 
 export function handlePubSubMessage(
@@ -221,14 +220,13 @@ function handleVideoPlaybackMessage(
 			streamer.stream.viewers = viewData.viewers;
 		}
 
-		if (
-			!streamer.isLive &&
-			streamer.stream.streamUpAt > 0 &&
-			Date.now() - streamer.stream.streamUpAt > 2 * 60_000
-		) {
-			deps.checkStreamerOnline(streamer).catch((err) => {
-				logger.error({ err, streamer: streamer.name }, 'Failed to check streamer online');
-			});
+		if (!streamer.isLive && streamer.metadata.status !== 'failed') {
+			// Viewcounts can recover a missed stream-up, but must not bypass the
+			// offline debounce or turn frequent events into frequent API requests.
+			streamer.metadata.nextCheckAtMs = Math.min(
+				streamer.metadata.nextCheckAtMs,
+				Math.max(streamer.metadata.lastAttemptAtMs + 60_000, streamer.offlineAt + 60_000)
+			);
 		}
 	}
 }

@@ -24,7 +24,7 @@ import {
 const logger = getLogger('Miner');
 const DISABLED_CHANNEL_POINTS_RECHECK_INTERVAL_MS = 12 * 60 * 60_000;
 const LIVE_METADATA_REFRESH_INTERVAL_MS = 10 * 60_000;
-const OFFLINE_METADATA_REFRESH_INTERVAL_MS = 2 * 60_000;
+const OFFLINE_METADATA_REFRESH_INTERVAL_MS = 15 * 60_000;
 const METADATA_RETRY_INTERVAL_MS = 60_000;
 const metadataChecks = new WeakMap<StreamerState, Promise<void>>();
 

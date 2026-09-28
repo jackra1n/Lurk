@@ -1,8 +1,0 @@
-{
-  "singleQuote": true,
-  "plugins": ["prettier-plugin-svelte"],
-  "useTabs": true,
-  "printWidth": 120,
-  "trailingComma": "none",
-  "bracketSameLine": true,
-}

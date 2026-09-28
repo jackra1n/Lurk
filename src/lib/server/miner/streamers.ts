@@ -180,12 +180,19 @@ export async function subscribeToStreamer(state: StreamerState): Promise<void> {
   }
 }
 
+export function isMetadataCheckDue(state: StreamerState, now: number): boolean {
+  return (
+    Boolean(state.channelId) &&
+    now >= state.metadata.nextCheckAtMs &&
+    (state.offlineAt <= 0 || now - state.offlineAt >= 60_000)
+  );
+}
+
 export function checkStreamerOnline(state: StreamerState): Promise<void> {
   const inFlight = metadataChecks.get(state);
   if (inFlight) return inFlight;
   const now = Date.now();
-  if (!state.channelId || now < state.metadata.nextCheckAtMs) return Promise.resolve();
-  if (state.offlineAt > 0 && now - state.offlineAt < 60_000) return Promise.resolve();
+  if (!isMetadataCheckDue(state, now)) return Promise.resolve();
 
   const generation = state.metadata.generation;
   state.metadata.lastAttemptAtMs = now;

@@ -12,6 +12,7 @@ import {
   subscribeToPointsTopic,
   subscribeToStreamer,
   checkStreamerOnline,
+  isMetadataCheckDue,
   invalidateStreamMetadata,
   selectStreamersToWatch,
   selectDueStreamers,
@@ -327,12 +328,7 @@ export class MinerService {
       const now = Date.now();
       let next: StreamerState | undefined;
       for (const state of this.streamerStates.values()) {
-        if (
-          !state.channelId ||
-          state.metadata.nextCheckAtMs > now ||
-          (state.offlineAt > 0 && now - state.offlineAt < 60_000)
-        )
-          continue;
+        if (!isMetadataCheckDue(state, now)) continue;
         if (!next || state.metadata.nextCheckAtMs < next.metadata.nextCheckAtMs) next = state;
       }
       if (!next) return;

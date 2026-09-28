@@ -159,14 +159,9 @@ function handleVideoPlaybackMessage(
   if (!streamer) return;
 
   if (messageType === VideoPlaybackMessageType.StreamUp) {
-    // record timestamp but do NOT mark live yet -- wait for viewcount verification
-    streamer.stream.streamUpAt = Date.now();
     // A new broadcast should be verified promptly, without bypassing outage backoff.
     if (streamer.metadata.status !== 'failed') {
-      streamer.metadata.nextCheckAtMs = Math.min(
-        streamer.metadata.nextCheckAtMs,
-        streamer.stream.streamUpAt + 2 * 60_000
-      );
+      streamer.metadata.nextCheckAtMs = Math.min(streamer.metadata.nextCheckAtMs, Date.now() + 2 * 60_000);
     }
     logger.debug({ streamer: streamer.name }, 'stream-up received, waiting for verification');
   } else if (messageType === VideoPlaybackMessageType.StreamDown) {

@@ -235,31 +235,161 @@ describe('watch-path GQL requests', () => {
 });
 
 describe('stream metadata scheduling', () => {
-  test('discovers a live stream from viewcounts when stream-up was missed', async () => {
+  test('the scheduler discovers a live stream from viewcounts when stream-up was missed', async () => {
     vi.useFakeTimers();
     const state = streamer('missed-up', 0);
     state.isLive = false;
+    const service = new MinerService();
+    const internals = service as unknown as WatchLoopInternals;
+    internals.running = true;
+    internals.streamerStates = new Map([[state.name, state]]);
     const deps: EventHandlerDeps = {
-      streamerStates: new Map([[state.name, state]]),
+      streamerStates: internals.streamerStates,
       dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
       claimBonus: async () => {}
     };
     const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockResolvedValue({ kind: 'offline' });
     const recordSpy = vi.spyOn(eventStore, 'recordEvent').mockImplementation(() => {});
     try {
-      await checkStreamerOnline(state);
-      vi.advanceTimersByTime(60_000);
+      internals.startMetadataLoop();
+      await internals.metadataCheck;
+      vi.advanceTimersByTime(30_000);
       statusSpy.mockResolvedValue({
         kind: 'live',
         info: { broadcastId: 'recovered', title: 'Live', game: null, viewersCount: 42 }
       });
       handlePubSubMessage(deps, 'video-playback-by-id.missed-up-id', 'viewcount', { viewers: 42 });
-      await checkStreamerOnline(state);
+      vi.advanceTimersByTime(29_000);
+      expect(statusSpy).toHaveBeenCalledTimes(1);
+      expect(state.isLive).toBe(false);
+      vi.advanceTimersByTime(1_000);
+      await internals.metadataCheck;
+      expect(statusSpy).toHaveBeenCalledTimes(2);
       expect(state.isLive).toBe(true);
       expect(state.stream.broadcastId).toBe('recovered');
     } finally {
+      internals.running = false;
+      internals.invalidateMetadataLoop();
+      await internals.metadataCheck;
       statusSpy.mockRestore();
       recordSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  test('the scheduler honors outage backoff despite viewer-count events', async () => {
+    vi.useFakeTimers();
+    const state = streamer('backoff', 0);
+    state.isLive = false;
+    const service = new MinerService();
+    const internals = service as unknown as WatchLoopInternals;
+    internals.running = true;
+    internals.streamerStates = new Map([[state.name, state]]);
+    const deps: EventHandlerDeps = {
+      streamerStates: internals.streamerStates,
+      dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
+      claimBonus: async () => {}
+    };
+    const retryAtMs = Date.now() + 5 * 60_000;
+    const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockResolvedValue({
+      kind: 'unknown',
+      reason: 'gql_error',
+      retryAtMs
+    });
+    const recordSpy = vi.spyOn(eventStore, 'recordEvent').mockImplementation(() => {});
+    try {
+      internals.startMetadataLoop();
+      await internals.metadataCheck;
+      statusSpy.mockResolvedValue({
+        kind: 'live',
+        info: { broadcastId: 'recovered', title: 'Live', game: null, viewersCount: 42 }
+      });
+      vi.advanceTimersByTime(60_000);
+      handlePubSubMessage(deps, 'video-playback-by-id.backoff-id', 'viewcount', { viewers: 42 });
+      vi.advanceTimersByTime(4 * 60_000 - 1);
+      expect(statusSpy).toHaveBeenCalledTimes(1);
+      expect(state.metadata.nextCheckAtMs).toBe(retryAtMs);
+      vi.advanceTimersByTime(1);
+      await internals.metadataCheck;
+      expect(state.isLive).toBe(true);
+      expect(state.stream.broadcastId).toBe('recovered');
+    } finally {
+      internals.running = false;
+      internals.invalidateMetadataLoop();
+      await internals.metadataCheck;
+      statusSpy.mockRestore();
+      recordSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  test('ineligible streamers do not starve a due streamer later in the map', async () => {
+    vi.useFakeTimers();
+    const missingId = streamer('missing-id', 0);
+    missingId.channelId = null;
+    const notDue = streamer('not-due', 0);
+    notDue.metadata.nextCheckAtMs = Date.now() + 60_000;
+    const debounced = streamer('debounced', 0);
+    debounced.offlineAt = Date.now();
+    const due = streamer('due', 0);
+    due.isLive = false;
+    const service = new MinerService();
+    const internals = service as unknown as WatchLoopInternals;
+    internals.running = true;
+    internals.streamerStates = new Map([missingId, notDue, debounced, due].map((state) => [state.name, state]));
+    const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockResolvedValue({ kind: 'offline' });
+    try {
+      internals.startMetadataLoop();
+      await internals.metadataCheck;
+      expect(statusSpy.mock.calls.map(([name]) => name)).toEqual(['due']);
+      expect(due.metadata.status).toBe('fresh');
+    } finally {
+      internals.running = false;
+      internals.invalidateMetadataLoop();
+      await internals.metadataCheck;
+      statusSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  test('stream-up retains delayed fallback verification without undoing outage backoff', async () => {
+    vi.useFakeTimers();
+    const state = streamer('stream-up', 0);
+    state.isLive = false;
+    state.metadata.nextCheckAtMs = Date.now() + 15 * 60_000;
+    const service = new MinerService();
+    const internals = service as unknown as WatchLoopInternals;
+    internals.running = true;
+    internals.streamerStates = new Map([[state.name, state]]);
+    const deps: EventHandlerDeps = {
+      streamerStates: internals.streamerStates,
+      dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
+      claimBonus: async () => {}
+    };
+    const retryAtMs = Date.now() + 10 * 60_000;
+    const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockResolvedValue({
+      kind: 'unknown',
+      reason: 'gql_error',
+      retryAtMs
+    });
+    try {
+      internals.startMetadataLoop();
+      handlePubSubMessage(deps, 'video-playback-by-id.stream-up-id', 'stream-up', {});
+      vi.advanceTimersByTime(2 * 60_000 - 1);
+      expect(statusSpy).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      await internals.metadataCheck;
+      expect(statusSpy).toHaveBeenCalledTimes(1);
+      handlePubSubMessage(deps, 'video-playback-by-id.stream-up-id', 'stream-up', {});
+      expect(state.metadata.nextCheckAtMs).toBe(retryAtMs);
+      vi.advanceTimersByTime(2 * 60_000);
+      expect(statusSpy).toHaveBeenCalledTimes(1);
+      expect(state.isLive).toBe(false);
+    } finally {
+      internals.running = false;
+      internals.invalidateMetadataLoop();
+      await internals.metadataCheck;
+      statusSpy.mockRestore();
       vi.useRealTimers();
     }
   });
@@ -418,10 +548,9 @@ describe('stream metadata scheduling', () => {
     }
   });
 
-  test('shares an in-flight check and retry deadline with PubSub verification', async () => {
+  test('viewer-count events preserve an in-flight metadata check and its failure deadline', async () => {
     const state = streamer('alpha', 0);
     state.isLive = false;
-    state.stream.streamUpAt = Date.now() - 3 * 60_000;
     const result = Promise.withResolvers<StreamInfoStatus>();
     const statusSpy = vi.spyOn(twitchClient, 'getStreamInfoStatus').mockImplementation(() => result.promise);
     const deps: EventHandlerDeps = {

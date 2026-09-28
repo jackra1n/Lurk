@@ -1,41 +1,42 @@
 {
-	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-	"vcs": {
-		"enabled": true,
-		"clientKind": "git",
-		"useIgnoreFile": true
-	},
-	"files": {
-		// Drizzle owns migration snapshots; Bun owns its lockfile.
-		"includes": ["**", "!!drizzle/meta", "!!bun.lock"]
-	},
-	// bun run format writes changes; bun run format:check is read-only (also used in CI).
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "tab",
-		"lineWidth": 120,
-		"lineEnding": "lf",
-		"bracketSameLine": true
-	},
-	// Keep formatting separate from lint fixes and import organization.
-	"linter": { "enabled": false },
-	"assist": { "enabled": false },
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "single",
-			"trailingCommas": "none",
-			"semicolons": "always"
-		}
-	},
-	"css": {
-		"parser": { "tailwindDirectives": true }
-	},
-	"html": {
-		// Full Svelte formatting is experimental; keep Biome pinned and verify upgrades.
-		"experimentalFullSupportEnabled": true,
-		"formatter": {
-			"enabled": true,
-			"indentScriptAndStyle": true
-		}
-	}
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    // Drizzle owns migration snapshots; Bun owns its lockfile.
+    "includes": ["**", "!!drizzle/meta", "!!bun.lock"]
+  },
+  // bun run format writes changes; bun run format:check is read-only (also used in CI).
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "lineEnding": "lf",
+    "bracketSameLine": true
+  },
+  // Keep formatting separate from lint fixes and import organization.
+  "linter": { "enabled": false },
+  "assist": { "enabled": false },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "none",
+      "semicolons": "always"
+    }
+  },
+  "css": {
+    "parser": { "tailwindDirectives": true }
+  },
+  "html": {
+    // Full Svelte formatting is experimental; keep Biome pinned and verify upgrades.
+    "experimentalFullSupportEnabled": true,
+    "formatter": {
+      "enabled": true,
+      "indentScriptAndStyle": true
+    }
+  }
 }

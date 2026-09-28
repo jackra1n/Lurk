@@ -10,12 +10,12 @@ export default defineConfig({
     tailwindcss(),
     sveltekit(),
     {
-      name: "lurk-startup",
+      name: 'lurk-startup',
       configureServer(server) {
-        server.ssrLoadModule("/src/hooks.server.ts").catch((err) => {
-          logger.error({ err }, "Failed to trigger backend initialization");
+        server.ssrLoadModule('/src/hooks.server.ts').catch((err) => {
+          logger.error({ err }, 'Failed to trigger backend initialization');
         });
-      },
-    },
-  ],
+      }
+    }
+  ]
 });

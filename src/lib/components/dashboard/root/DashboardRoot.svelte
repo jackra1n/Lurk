@@ -1,553 +1,539 @@
 <script lang="ts">
-	import Github from '@lucide/svelte/icons/github';
-	import { onMount } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
-	import HeaderSection from '../header/HeaderSection.svelte';
-	import ChannelPointsInsightsSection from '../channel-insights/ChannelPointsInsightsSection.svelte';
-	import PointsOverview from '../channel-points/PointsOverview.svelte';
-	import DashboardNotice from '../shared/DashboardNotice.svelte';
-	import SummaryCardsSection from '../summary-cards/SummaryCardsSection.svelte';
-	import type {
-		AuthStatusResponse,
-		ChannelPointsRecentEventItem,
-		ChannelPointsAnalyticsResponse,
-		ChannelPointsControlChange,
-		ChannelPointsControls,
-		ChannelPointsRangeSelection,
-		ChannelPointsSortBy,
-		LifecycleReason,
-		MinerLifecycle,
-		MinerStatusResponse,
-		SortDir,
-		StreamerActivityItem,
-		StreamerActivityResponse
-	} from '../shared/types';
+  import Github from '@lucide/svelte/icons/github';
+  import { onMount } from 'svelte';
+  import { Button } from '$lib/components/ui/button';
+  import HeaderSection from '../header/HeaderSection.svelte';
+  import ChannelPointsInsightsSection from '../channel-insights/ChannelPointsInsightsSection.svelte';
+  import PointsOverview from '../channel-points/PointsOverview.svelte';
+  import DashboardNotice from '../shared/DashboardNotice.svelte';
+  import SummaryCardsSection from '../summary-cards/SummaryCardsSection.svelte';
+  import type {
+    AuthStatusResponse,
+    ChannelPointsRecentEventItem,
+    ChannelPointsAnalyticsResponse,
+    ChannelPointsControlChange,
+    ChannelPointsControls,
+    ChannelPointsRangeSelection,
+    ChannelPointsSortBy,
+    LifecycleReason,
+    MinerLifecycle,
+    MinerStatusResponse,
+    SortDir,
+    StreamerActivityItem,
+    StreamerActivityResponse
+  } from '../shared/types';
 
-	const themeStorageKey = 'theme';
-	const fastPollMs = 2000;
-	const slowPollMs = 10000;
-	const successNoticeAutoDismissMs = 8000;
-	const lifecycleValues: MinerLifecycle[] = [
-		'starting',
-		'running',
-		'ready',
-		'auth_required',
-		'authenticating',
-		'error'
-	];
-	const reasonValues: Exclude<LifecycleReason, null>[] = ['missing_token', 'invalid_token', 'auth_pending', 'startup_failed'];
-	const defaultAnalyticsRangeMs = 24 * 60 * 60 * 1000;
-	const initialAnalyticsRangeToMs = Date.now();
-	const hourMs = 60 * 60 * 1000;
-	const presetRangeDurationMs: Record<Exclude<ChannelPointsRangeSelection, 'calendar'>, number> = {
-		'24h': 24 * hourMs,
-		'7d': 7 * 24 * hourMs,
-		'30d': 30 * 24 * hourMs
-	};
+  const themeStorageKey = 'theme';
+  const fastPollMs = 2000;
+  const slowPollMs = 10000;
+  const successNoticeAutoDismissMs = 8000;
+  const lifecycleValues: MinerLifecycle[] = [
+    'starting',
+    'running',
+    'ready',
+    'auth_required',
+    'authenticating',
+    'error'
+  ];
+  const reasonValues: Exclude<LifecycleReason, null>[] = [
+    'missing_token',
+    'invalid_token',
+    'auth_pending',
+    'startup_failed'
+  ];
+  const defaultAnalyticsRangeMs = 24 * 60 * 60 * 1000;
+  const initialAnalyticsRangeToMs = Date.now();
+  const hourMs = 60 * 60 * 1000;
+  const presetRangeDurationMs: Record<Exclude<ChannelPointsRangeSelection, 'calendar'>, number> = {
+    '24h': 24 * hourMs,
+    '7d': 7 * 24 * hourMs,
+    '30d': 30 * 24 * hourMs
+  };
 
-	const defaultAuthStatus: AuthStatusResponse = {
-		authenticated: false,
-		userId: null,
-		username: null,
-		pendingLogin: false,
-		userCode: null,
-		verificationUri: null,
-		expiresAt: null
-	};
+  const defaultAuthStatus: AuthStatusResponse = {
+    authenticated: false,
+    userId: null,
+    username: null,
+    pendingLogin: false,
+    userCode: null,
+    verificationUri: null,
+    expiresAt: null
+  };
 
-	const defaultMinerStatus: MinerStatusResponse = {
-		running: false,
-		lifecycle: 'auth_required',
-		reason: 'missing_token',
-		configuredStreamers: [],
-		streamerRuntimeStates: []
-	};
-	type DashboardNoticeHandle = {
-		setSuccess: (text: string) => void;
-		setError: (text: string) => void;
-		clear: () => void;
-	};
+  const defaultMinerStatus: MinerStatusResponse = {
+    running: false,
+    lifecycle: 'auth_required',
+    reason: 'missing_token',
+    configuredStreamers: [],
+    streamerRuntimeStates: []
+  };
+  type DashboardNoticeHandle = {
+    setSuccess: (text: string) => void;
+    setError: (text: string) => void;
+    clear: () => void;
+  };
 
-	let isDark = $state(true);
-	let authStatus = $state<AuthStatusResponse>(defaultAuthStatus);
-	let minerStatus = $state<MinerStatusResponse>(defaultMinerStatus);
-	let loadingStartAfterAuth = $state(false);
-	let loadingMinerAction = $state(false);
-	let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
-	let streamerActivity = $state<StreamerActivityItem[]>([]);
-	let recentEvents = $state<ChannelPointsRecentEventItem[]>([]);
-	let analyticsLoading = $state(false);
-	let analyticsErrorMessage = $state<string | null>(null);
-	let analyticsSortBy = $state<ChannelPointsSortBy>('lastWatched');
-	let analyticsSortDir = $state<SortDir>('desc');
-	let analyticsRangeToMs = $state(initialAnalyticsRangeToMs);
-	let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
-	let analyticsRangeSelection = $state<ChannelPointsRangeSelection>('24h');
-	let selectedStreamerLogin = $state<string | null>(null);
-	let pollIntervalMs = $state(slowPollMs);
-	let minerActionIntent = $state<'start' | 'stop' | null>(null);
-	let dashboardNoticeRef: DashboardNoticeHandle | null = null;
-	let analyticsControls = $derived({
-		sortBy: analyticsSortBy,
-		sortDir: analyticsSortDir,
-		rangeFromMs: analyticsRangeFromMs,
-		rangeToMs: analyticsRangeToMs,
-		rangeSelection: analyticsRangeSelection
-	} satisfies ChannelPointsControls);
-	let quickActionsActionPhase = $derived<'idle' | 'starting' | 'stopping'>(
-		minerStatus.lifecycle === 'starting' ||
-			loadingStartAfterAuth ||
-			(loadingMinerAction && minerActionIntent === 'start')
-			? 'starting'
-			: loadingMinerAction && minerActionIntent === 'stop'
-				? 'stopping'
-				: 'idle'
-	);
-	let startMinerDisabled = $derived(
-		loadingMinerAction ||
-		loadingStartAfterAuth ||
-		minerStatus.running ||
-		minerStatus.lifecycle !== 'ready'
-	);
-	let stopMinerDisabled = $derived(loadingMinerAction || !minerStatus.running);
-	let analyticsRequestSeq = 0;
-	let analyticsLoadingRequestSeq = 0;
+  let isDark = $state(true);
+  let authStatus = $state<AuthStatusResponse>(defaultAuthStatus);
+  let minerStatus = $state<MinerStatusResponse>(defaultMinerStatus);
+  let loadingStartAfterAuth = $state(false);
+  let loadingMinerAction = $state(false);
+  let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
+  let streamerActivity = $state<StreamerActivityItem[]>([]);
+  let recentEvents = $state<ChannelPointsRecentEventItem[]>([]);
+  let analyticsLoading = $state(false);
+  let analyticsErrorMessage = $state<string | null>(null);
+  let analyticsSortBy = $state<ChannelPointsSortBy>('lastWatched');
+  let analyticsSortDir = $state<SortDir>('desc');
+  let analyticsRangeToMs = $state(initialAnalyticsRangeToMs);
+  let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
+  let analyticsRangeSelection = $state<ChannelPointsRangeSelection>('24h');
+  let selectedStreamerLogin = $state<string | null>(null);
+  let pollIntervalMs = $state(slowPollMs);
+  let minerActionIntent = $state<'start' | 'stop' | null>(null);
+  let dashboardNoticeRef: DashboardNoticeHandle | null = null;
+  let analyticsControls = $derived({
+    sortBy: analyticsSortBy,
+    sortDir: analyticsSortDir,
+    rangeFromMs: analyticsRangeFromMs,
+    rangeToMs: analyticsRangeToMs,
+    rangeSelection: analyticsRangeSelection
+  } satisfies ChannelPointsControls);
+  let quickActionsActionPhase = $derived<'idle' | 'starting' | 'stopping'>(
+    minerStatus.lifecycle === 'starting' ||
+      loadingStartAfterAuth ||
+      (loadingMinerAction && minerActionIntent === 'start')
+      ? 'starting'
+      : loadingMinerAction && minerActionIntent === 'stop'
+        ? 'stopping'
+        : 'idle'
+  );
+  let startMinerDisabled = $derived(
+    loadingMinerAction || loadingStartAfterAuth || minerStatus.running || minerStatus.lifecycle !== 'ready'
+  );
+  let stopMinerDisabled = $derived(loadingMinerAction || !minerStatus.running);
+  let analyticsRequestSeq = 0;
+  let analyticsLoadingRequestSeq = 0;
 
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
-	let autoStartAttempted = false;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let autoStartAttempted = false;
 
-	onMount(() => {
-		const root = document.documentElement;
-		isDark = root.classList.contains('dark');
+  onMount(() => {
+    const root = document.documentElement;
+    isDark = root.classList.contains('dark');
 
-		refreshAllStatus().catch((error) => {
-			setErrorNotice(error instanceof Error ? error.message : 'Failed to load status');
-		});
+    refreshAllStatus().catch((error) => {
+      setErrorNotice(error instanceof Error ? error.message : 'Failed to load status');
+    });
 
-		syncPolling();
+    syncPolling();
 
-		return () => {
-			if (pollTimer) {
-				clearInterval(pollTimer);
-				pollTimer = null;
-			}
-			dashboardNoticeRef?.clear();
-		};
-	});
+    return () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      dashboardNoticeRef?.clear();
+    };
+  });
 
-	const toggleTheme = () => {
-		const root = document.documentElement;
-		const nextIsDark = !root.classList.contains('dark');
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const nextIsDark = !root.classList.contains('dark');
 
-		root.classList.toggle('dark', nextIsDark);
-		root.style.colorScheme = nextIsDark ? 'dark' : 'light';
-		localStorage.setItem(themeStorageKey, nextIsDark ? 'dark' : 'light');
-		isDark = nextIsDark;
-	};
+    root.classList.toggle('dark', nextIsDark);
+    root.style.colorScheme = nextIsDark ? 'dark' : 'light';
+    localStorage.setItem(themeStorageKey, nextIsDark ? 'dark' : 'light');
+    isDark = nextIsDark;
+  };
 
-	const isLifecycle = (value: unknown): value is MinerLifecycle =>
-		typeof value === 'string' && lifecycleValues.includes(value as MinerLifecycle);
+  const isLifecycle = (value: unknown): value is MinerLifecycle =>
+    typeof value === 'string' && lifecycleValues.includes(value as MinerLifecycle);
 
-	const isReason = (value: unknown): value is LifecycleReason =>
-		value === null || (typeof value === 'string' && reasonValues.includes(value as Exclude<LifecycleReason, null>));
+  const isReason = (value: unknown): value is LifecycleReason =>
+    value === null || (typeof value === 'string' && reasonValues.includes(value as Exclude<LifecycleReason, null>));
 
-	const getErrorMessage = (payload: unknown, fallback: string) => {
-		if (!payload || typeof payload !== 'object') return fallback;
-		const { message } = payload as { message?: unknown };
-		return typeof message === 'string' && message.length > 0 ? message : fallback;
-	};
+  const getErrorMessage = (payload: unknown, fallback: string) => {
+    if (!payload || typeof payload !== 'object') return fallback;
+    const { message } = payload as { message?: unknown };
+    return typeof message === 'string' && message.length > 0 ? message : fallback;
+  };
 
-	const setSuccessNotice = (nextMessage: string) => {
-		dashboardNoticeRef?.setSuccess(nextMessage);
-	};
+  const setSuccessNotice = (nextMessage: string) => {
+    dashboardNoticeRef?.setSuccess(nextMessage);
+  };
 
-	const setErrorNotice = (nextErrorMessage: string) => {
-		dashboardNoticeRef?.setError(nextErrorMessage);
-	};
+  const setErrorNotice = (nextErrorMessage: string) => {
+    dashboardNoticeRef?.setError(nextErrorMessage);
+  };
 
-	const readJson = async (response: Response) => {
-		try {
-			return await response.json();
-		} catch {
-			return null;
-		}
-	};
+  const readJson = async (response: Response) => {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  };
 
-	const getSuccessMessage = (payload: { message?: unknown }, fallback: string) =>
-		typeof payload.message === 'string' && payload.message.length > 0 ? payload.message : fallback;
+  const getSuccessMessage = (payload: { message?: unknown }, fallback: string) =>
+    typeof payload.message === 'string' && payload.message.length > 0 ? payload.message : fallback;
 
-	const postMinerAction = async (action: 'start' | 'stop') => {
-		const response = await fetch('/api/miner', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ action })
-		});
-		const payload = await readJson(response);
-		const fallback = action === 'start' ? 'Failed to start miner' : 'Failed to stop miner';
+  const postMinerAction = async (action: 'start' | 'stop') => {
+    const response = await fetch('/api/miner', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action })
+    });
+    const payload = await readJson(response);
+    const fallback = action === 'start' ? 'Failed to start miner' : 'Failed to stop miner';
 
-		if (!response.ok || !(payload && typeof payload === 'object' && (payload as { success?: unknown }).success)) {
-			throw new Error(getErrorMessage(payload, fallback));
-		}
+    if (!response.ok || !(payload && typeof payload === 'object' && (payload as { success?: unknown }).success)) {
+      throw new Error(getErrorMessage(payload, fallback));
+    }
 
-		return payload as { message?: unknown };
-	};
+    return payload as { message?: unknown };
+  };
 
-	const fetchAuthStatus = async () => {
-		const response = await fetch('/api/auth');
-		const payload = await readJson(response);
+  const fetchAuthStatus = async () => {
+    const response = await fetch('/api/auth');
+    const payload = await readJson(response);
 
-		if (!response.ok || !payload || typeof payload !== 'object') {
-			throw new Error(getErrorMessage(payload, 'Failed to fetch auth status'));
-		}
+    if (!response.ok || !payload || typeof payload !== 'object') {
+      throw new Error(getErrorMessage(payload, 'Failed to fetch auth status'));
+    }
 
-		return {
-			authenticated: Boolean((payload as { authenticated?: unknown }).authenticated),
-			userId: typeof (payload as { userId?: unknown }).userId === 'string' ? (payload as { userId: string }).userId : null,
-			username:
-				typeof (payload as { username?: unknown }).username === 'string'
-					? (payload as { username: string }).username
-					: null,
-			pendingLogin: Boolean((payload as { pendingLogin?: unknown }).pendingLogin),
-			userCode:
-				typeof (payload as { userCode?: unknown }).userCode === 'string'
-					? (payload as { userCode: string }).userCode
-					: null,
-			verificationUri:
-				typeof (payload as { verificationUri?: unknown }).verificationUri === 'string'
-					? (payload as { verificationUri: string }).verificationUri
-					: null,
-			expiresAt:
-				typeof (payload as { expiresAt?: unknown }).expiresAt === 'string'
-					? (payload as { expiresAt: string }).expiresAt
-					: null
-		} satisfies AuthStatusResponse;
-	};
+    return {
+      authenticated: Boolean((payload as { authenticated?: unknown }).authenticated),
+      userId:
+        typeof (payload as { userId?: unknown }).userId === 'string' ? (payload as { userId: string }).userId : null,
+      username:
+        typeof (payload as { username?: unknown }).username === 'string'
+          ? (payload as { username: string }).username
+          : null,
+      pendingLogin: Boolean((payload as { pendingLogin?: unknown }).pendingLogin),
+      userCode:
+        typeof (payload as { userCode?: unknown }).userCode === 'string'
+          ? (payload as { userCode: string }).userCode
+          : null,
+      verificationUri:
+        typeof (payload as { verificationUri?: unknown }).verificationUri === 'string'
+          ? (payload as { verificationUri: string }).verificationUri
+          : null,
+      expiresAt:
+        typeof (payload as { expiresAt?: unknown }).expiresAt === 'string'
+          ? (payload as { expiresAt: string }).expiresAt
+          : null
+    } satisfies AuthStatusResponse;
+  };
 
-	const fetchMinerStatus = async () => {
-		const response = await fetch('/api/miner');
-		const payload = await readJson(response);
+  const fetchMinerStatus = async () => {
+    const response = await fetch('/api/miner');
+    const payload = await readJson(response);
 
-		if (!response.ok || !payload || typeof payload !== 'object') {
-			throw new Error(getErrorMessage(payload, 'Failed to fetch miner status'));
-		}
+    if (!response.ok || !payload || typeof payload !== 'object') {
+      throw new Error(getErrorMessage(payload, 'Failed to fetch miner status'));
+    }
 
-		const nextLifecycle = (payload as { lifecycle?: unknown }).lifecycle;
-		const nextReason = (payload as { reason?: unknown }).reason;
-		const configuredStreamers = (payload as { configuredStreamers?: unknown }).configuredStreamers;
-		const streamers = (payload as { streamers?: unknown }).streamers;
-		const streamerRuntimeStates = (payload as { streamerRuntimeStates?: unknown }).streamerRuntimeStates;
-		const disabledStreamers = new Set(
-			Array.isArray(streamers)
-				? streamers.flatMap((value) => {
-						if (!value || typeof value !== 'object') return [];
-						const name = (value as { name?: unknown }).name;
-						const channelPointsStatus = (value as { channelPointsStatus?: unknown }).channelPointsStatus;
-						return typeof name === 'string' && channelPointsStatus === 'disabled' ? [name] : [];
-					})
-				: []
-		);
+    const nextLifecycle = (payload as { lifecycle?: unknown }).lifecycle;
+    const nextReason = (payload as { reason?: unknown }).reason;
+    const configuredStreamers = (payload as { configuredStreamers?: unknown }).configuredStreamers;
+    const streamers = (payload as { streamers?: unknown }).streamers;
+    const streamerRuntimeStates = (payload as { streamerRuntimeStates?: unknown }).streamerRuntimeStates;
+    const disabledStreamers = new Set(
+      Array.isArray(streamers)
+        ? streamers.flatMap((value) => {
+            if (!value || typeof value !== 'object') return [];
+            const name = (value as { name?: unknown }).name;
+            const channelPointsStatus = (value as { channelPointsStatus?: unknown }).channelPointsStatus;
+            return typeof name === 'string' && channelPointsStatus === 'disabled' ? [name] : [];
+          })
+        : []
+    );
 
-		return {
-			running: Boolean((payload as { running?: unknown }).running),
-			lifecycle: isLifecycle(nextLifecycle) ? nextLifecycle : 'auth_required',
-			reason: isReason(nextReason) ? nextReason : null,
-			configuredStreamers: Array.isArray(configuredStreamers)
-				? configuredStreamers.filter((value): value is string => typeof value === 'string')
-				: [],
-			streamerRuntimeStates: Array.isArray(streamerRuntimeStates)
-				? streamerRuntimeStates.flatMap((value) => {
-						if (!value || typeof value !== 'object') return [];
-						const login = (value as { login?: unknown }).login;
-						if (typeof login !== 'string') return [];
-						return [
-							{
-								login,
-								isOnline: Boolean((value as { isOnline?: unknown }).isOnline),
-								isWatched: Boolean((value as { isWatched?: unknown }).isWatched),
-								channelPointsDisabled: disabledStreamers.has(login)
-							}
-						];
-					})
-				: []
-		} satisfies MinerStatusResponse;
-	};
+    return {
+      running: Boolean((payload as { running?: unknown }).running),
+      lifecycle: isLifecycle(nextLifecycle) ? nextLifecycle : 'auth_required',
+      reason: isReason(nextReason) ? nextReason : null,
+      configuredStreamers: Array.isArray(configuredStreamers)
+        ? configuredStreamers.filter((value): value is string => typeof value === 'string')
+        : [],
+      streamerRuntimeStates: Array.isArray(streamerRuntimeStates)
+        ? streamerRuntimeStates.flatMap((value) => {
+            if (!value || typeof value !== 'object') return [];
+            const login = (value as { login?: unknown }).login;
+            if (typeof login !== 'string') return [];
+            return [
+              {
+                login,
+                isOnline: Boolean((value as { isOnline?: unknown }).isOnline),
+                isWatched: Boolean((value as { isWatched?: unknown }).isWatched),
+                channelPointsDisabled: disabledStreamers.has(login)
+              }
+            ];
+          })
+        : []
+    } satisfies MinerStatusResponse;
+  };
 
-	const fetchChannelPointsAnalytics = async () => {
-		syncRollingAnalyticsRangeToNow();
-		const query = new URLSearchParams({
-			from: String(analyticsRangeFromMs),
-			to: String(analyticsRangeToMs),
-			sortBy: analyticsSortBy,
-			sortDir: analyticsSortDir
-		});
+  const fetchChannelPointsAnalytics = async () => {
+    syncRollingAnalyticsRangeToNow();
+    const query = new URLSearchParams({
+      from: String(analyticsRangeFromMs),
+      to: String(analyticsRangeToMs),
+      sortBy: analyticsSortBy,
+      sortDir: analyticsSortDir
+    });
 
-		if (selectedStreamerLogin) {
-			query.set('selectedStreamer', selectedStreamerLogin);
-		}
+    if (selectedStreamerLogin) {
+      query.set('selectedStreamer', selectedStreamerLogin);
+    }
 
-		const response = await fetch(`/api/dashboard/channel-points?${query.toString()}`);
-		const payload = await readJson(response);
+    const response = await fetch(`/api/dashboard/channel-points?${query.toString()}`);
+    const payload = await readJson(response);
 
-		if (
-			!response.ok ||
-			!payload ||
-			typeof payload !== 'object' ||
-			!(payload as { success?: unknown }).success
-		) {
-			throw new Error(getErrorMessage(payload, 'Failed to fetch channel points analytics'));
-		}
+    if (!response.ok || !payload || typeof payload !== 'object' || !(payload as { success?: unknown }).success) {
+      throw new Error(getErrorMessage(payload, 'Failed to fetch channel points analytics'));
+    }
 
-		return payload as ChannelPointsAnalyticsResponse;
-	};
+    return payload as ChannelPointsAnalyticsResponse;
+  };
 
-	const fetchStreamerActivity = async () => {
-		const response = await fetch('/api/dashboard/streamer-activity?days=7');
-		const payload = await readJson(response);
+  const fetchStreamerActivity = async () => {
+    const response = await fetch('/api/dashboard/streamer-activity?days=7');
+    const payload = await readJson(response);
 
-		if (
-			!response.ok ||
-			!payload ||
-			typeof payload !== 'object' ||
-			!(payload as { success?: unknown }).success
-		) {
-			throw new Error(getErrorMessage(payload, 'Failed to fetch streamer activity'));
-		}
+    if (!response.ok || !payload || typeof payload !== 'object' || !(payload as { success?: unknown }).success) {
+      throw new Error(getErrorMessage(payload, 'Failed to fetch streamer activity'));
+    }
 
-		return payload as StreamerActivityResponse;
-	};
+    return payload as StreamerActivityResponse;
+  };
 
-	const syncRollingAnalyticsRangeToNow = () => {
-		if (analyticsRangeSelection === 'calendar') return;
-		const durationMs = presetRangeDurationMs[analyticsRangeSelection];
-		const nextToMs = Date.now();
-		const nextFromMs = nextToMs - durationMs;
+  const syncRollingAnalyticsRangeToNow = () => {
+    if (analyticsRangeSelection === 'calendar') return;
+    const durationMs = presetRangeDurationMs[analyticsRangeSelection];
+    const nextToMs = Date.now();
+    const nextFromMs = nextToMs - durationMs;
 
-		if (analyticsRangeToMs === nextToMs && analyticsRangeFromMs === nextFromMs) return;
-		analyticsRangeToMs = nextToMs;
-		analyticsRangeFromMs = nextFromMs;
-	};
+    if (analyticsRangeToMs === nextToMs && analyticsRangeFromMs === nextFromMs) return;
+    analyticsRangeToMs = nextToMs;
+    analyticsRangeFromMs = nextFromMs;
+  };
 
-	const refreshAnalytics = async (showLoading = false) => {
-		const requestSeq = ++analyticsRequestSeq;
-		if (showLoading) {
-			analyticsLoading = true;
-			analyticsLoadingRequestSeq = requestSeq;
-		}
+  const refreshAnalytics = async (showLoading = false) => {
+    const requestSeq = ++analyticsRequestSeq;
+    if (showLoading) {
+      analyticsLoading = true;
+      analyticsLoadingRequestSeq = requestSeq;
+    }
 
-		try {
-			const nextAnalytics = await fetchChannelPointsAnalytics();
-			if (requestSeq !== analyticsRequestSeq) return;
-			analytics = nextAnalytics;
-			selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
-			analyticsErrorMessage = null;
-		} catch (error) {
-			if (requestSeq !== analyticsRequestSeq) return;
-			analyticsErrorMessage =
-				error instanceof Error ? error.message : 'Failed to fetch channel points analytics';
-		} finally {
-			if (showLoading && requestSeq === analyticsLoadingRequestSeq) analyticsLoading = false;
-		}
-	};
+    try {
+      const nextAnalytics = await fetchChannelPointsAnalytics();
+      if (requestSeq !== analyticsRequestSeq) return;
+      analytics = nextAnalytics;
+      selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
+      analyticsErrorMessage = null;
+    } catch (error) {
+      if (requestSeq !== analyticsRequestSeq) return;
+      analyticsErrorMessage = error instanceof Error ? error.message : 'Failed to fetch channel points analytics';
+    } finally {
+      if (showLoading && requestSeq === analyticsLoadingRequestSeq) analyticsLoading = false;
+    }
+  };
 
-	const getDesiredPollInterval = () =>
-		authStatus.pendingLogin || minerStatus.lifecycle === 'authenticating' ? fastPollMs : slowPollMs;
+  const getDesiredPollInterval = () =>
+    authStatus.pendingLogin || minerStatus.lifecycle === 'authenticating' ? fastPollMs : slowPollMs;
 
-	const syncPolling = () => {
-		const nextInterval = getDesiredPollInterval();
-		pollIntervalMs = nextInterval;
+  const syncPolling = () => {
+    const nextInterval = getDesiredPollInterval();
+    pollIntervalMs = nextInterval;
 
-		if (pollTimer) {
-			clearInterval(pollTimer);
-		}
+    if (pollTimer) {
+      clearInterval(pollTimer);
+    }
 
-		pollTimer = setInterval(() => {
-			refreshAllStatus().catch((error) => {
-				setErrorNotice(error instanceof Error ? error.message : 'Failed to refresh status');
-			});
-		}, nextInterval);
-	};
+    pollTimer = setInterval(() => {
+      refreshAllStatus().catch((error) => {
+        setErrorNotice(error instanceof Error ? error.message : 'Failed to refresh status');
+      });
+    }, nextInterval);
+  };
 
-	const refreshAllStatus = async (options?: { autoStart?: boolean }) => {
-		const autoStart = options?.autoStart ?? true;
-		const wasPendingLogin = authStatus.pendingLogin;
-		const [nextAuthStatus, nextMinerStatus, nextStreamerActivity] = await Promise.all([
-			fetchAuthStatus(),
-			fetchMinerStatus(),
-			fetchStreamerActivity()
-		]);
+  const refreshAllStatus = async (options?: { autoStart?: boolean }) => {
+    const autoStart = options?.autoStart ?? true;
+    const wasPendingLogin = authStatus.pendingLogin;
+    const [nextAuthStatus, nextMinerStatus, nextStreamerActivity] = await Promise.all([
+      fetchAuthStatus(),
+      fetchMinerStatus(),
+      fetchStreamerActivity()
+    ]);
 
-		authStatus = nextAuthStatus;
-		minerStatus = nextMinerStatus;
-		streamerActivity = nextStreamerActivity.streamers;
-		recentEvents = nextStreamerActivity.events;
-		await refreshAnalytics();
+    authStatus = nextAuthStatus;
+    minerStatus = nextMinerStatus;
+    streamerActivity = nextStreamerActivity.streamers;
+    recentEvents = nextStreamerActivity.events;
+    await refreshAnalytics();
 
-		if (!nextAuthStatus.authenticated) {
-			autoStartAttempted = false;
-		}
+    if (!nextAuthStatus.authenticated) {
+      autoStartAttempted = false;
+    }
 
-		if (getDesiredPollInterval() !== pollIntervalMs) {
-			syncPolling();
-		}
+    if (getDesiredPollInterval() !== pollIntervalMs) {
+      syncPolling();
+    }
 
-		const justFinishedAuth = wasPendingLogin && !nextAuthStatus.pendingLogin && nextAuthStatus.authenticated;
-		const shouldStartMiner = autoStart && justFinishedAuth && !nextMinerStatus.running && !autoStartAttempted;
+    const justFinishedAuth = wasPendingLogin && !nextAuthStatus.pendingLogin && nextAuthStatus.authenticated;
+    const shouldStartMiner = autoStart && justFinishedAuth && !nextMinerStatus.running && !autoStartAttempted;
 
-		if (shouldStartMiner) {
-			autoStartAttempted = true;
-			setSuccessNotice('Authentication complete. Starting miner...');
-			await startMinerAfterAuth();
-		}
-	};
+    if (shouldStartMiner) {
+      autoStartAttempted = true;
+      setSuccessNotice('Authentication complete. Starting miner...');
+      await startMinerAfterAuth();
+    }
+  };
 
-	const startMinerAfterAuth = async () => {
-		minerActionIntent = 'start';
-		loadingStartAfterAuth = true;
+  const startMinerAfterAuth = async () => {
+    minerActionIntent = 'start';
+    loadingStartAfterAuth = true;
 
-		try {
-			const payload = await postMinerAction('start');
-			setSuccessNotice(getSuccessMessage(payload, 'Miner started successfully.'));
-		} catch (error) {
-			setErrorNotice(error instanceof Error ? error.message : 'Failed to start miner');
-		} finally {
-			loadingStartAfterAuth = false;
-			await refreshStatus();
-			minerActionIntent = null;
-		}
-	};
+    try {
+      const payload = await postMinerAction('start');
+      setSuccessNotice(getSuccessMessage(payload, 'Miner started successfully.'));
+    } catch (error) {
+      setErrorNotice(error instanceof Error ? error.message : 'Failed to start miner');
+    } finally {
+      loadingStartAfterAuth = false;
+      await refreshStatus();
+      minerActionIntent = null;
+    }
+  };
 
-	const refreshStatus = async () => {
-		try {
-			await refreshAllStatus({ autoStart: false });
-		} catch (error) {
-			setErrorNotice(error instanceof Error ? error.message : 'Failed to refresh status');
-		}
-	};
+  const refreshStatus = async () => {
+    try {
+      await refreshAllStatus({ autoStart: false });
+    } catch (error) {
+      setErrorNotice(error instanceof Error ? error.message : 'Failed to refresh status');
+    }
+  };
 
-	const handleStartMiner = async () => {
-		if (startMinerDisabled) return;
-		minerActionIntent = 'start';
-		loadingMinerAction = true;
+  const handleStartMiner = async () => {
+    if (startMinerDisabled) return;
+    minerActionIntent = 'start';
+    loadingMinerAction = true;
 
-		try {
-			const payload = await postMinerAction('start');
-			setSuccessNotice(getSuccessMessage(payload, 'Miner started successfully.'));
-		} catch (error) {
-			setErrorNotice(error instanceof Error ? error.message : 'Failed to start miner');
-		} finally {
-			loadingMinerAction = false;
-			await refreshStatus();
-			minerActionIntent = null;
-		}
-	};
+    try {
+      const payload = await postMinerAction('start');
+      setSuccessNotice(getSuccessMessage(payload, 'Miner started successfully.'));
+    } catch (error) {
+      setErrorNotice(error instanceof Error ? error.message : 'Failed to start miner');
+    } finally {
+      loadingMinerAction = false;
+      await refreshStatus();
+      minerActionIntent = null;
+    }
+  };
 
-	const handleStopMiner = async () => {
-		if (stopMinerDisabled) return;
-		minerActionIntent = 'stop';
-		loadingMinerAction = true;
+  const handleStopMiner = async () => {
+    if (stopMinerDisabled) return;
+    minerActionIntent = 'stop';
+    loadingMinerAction = true;
 
-		try {
-			const payload = await postMinerAction('stop');
-			setSuccessNotice(getSuccessMessage(payload, 'Miner stopped.'));
-		} catch (error) {
-			setErrorNotice(error instanceof Error ? error.message : 'Failed to stop miner');
-		} finally {
-			loadingMinerAction = false;
-			await refreshStatus();
-			minerActionIntent = null;
-		}
-	};
+    try {
+      const payload = await postMinerAction('stop');
+      setSuccessNotice(getSuccessMessage(payload, 'Miner stopped.'));
+    } catch (error) {
+      setErrorNotice(error instanceof Error ? error.message : 'Failed to stop miner');
+    } finally {
+      loadingMinerAction = false;
+      await refreshStatus();
+      minerActionIntent = null;
+    }
+  };
 
-	const handleChannelPointsControlChange = async (change: ChannelPointsControlChange) => {
-		if (change.type === 'sortBy') {
-			if (analyticsSortBy === change.value) return;
-			analyticsSortBy = change.value;
-			await refreshAnalytics(true);
-			return;
-		}
+  const handleChannelPointsControlChange = async (change: ChannelPointsControlChange) => {
+    if (change.type === 'sortBy') {
+      if (analyticsSortBy === change.value) return;
+      analyticsSortBy = change.value;
+      await refreshAnalytics(true);
+      return;
+    }
 
-		if (change.type === 'toggleSortDir') {
-			analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
-			await refreshAnalytics(true);
-			return;
-		}
+    if (change.type === 'toggleSortDir') {
+      analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
+      await refreshAnalytics(true);
+      return;
+    }
 
-		if (change.type === 'selectStreamer') {
-			if (selectedStreamerLogin === change.login) return;
-			selectedStreamerLogin = change.login;
-			await refreshAnalytics(true);
-			return;
-		}
+    if (change.type === 'selectStreamer') {
+      if (selectedStreamerLogin === change.login) return;
+      selectedStreamerLogin = change.login;
+      await refreshAnalytics(true);
+      return;
+    }
 
-		if (
-			analyticsRangeFromMs === change.fromMs &&
-			analyticsRangeToMs === change.toMs &&
-			analyticsRangeSelection === change.selection
-		) {
-			return;
-		}
-		analyticsRangeFromMs = change.fromMs;
-		analyticsRangeToMs = change.toMs;
-		analyticsRangeSelection = change.selection;
-		await refreshAnalytics(true);
-	};
-
+    if (
+      analyticsRangeFromMs === change.fromMs &&
+      analyticsRangeToMs === change.toMs &&
+      analyticsRangeSelection === change.selection
+    ) {
+      return;
+    }
+    analyticsRangeFromMs = change.fromMs;
+    analyticsRangeToMs = change.toMs;
+    analyticsRangeSelection = change.selection;
+    await refreshAnalytics(true);
+  };
 </script>
 
 <div class="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
-	<main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-		<HeaderSection
-			{authStatus}
-			{loadingStartAfterAuth}
-			{isDark}
-			onAuthStatusChange={refreshStatus}
-			onToggleTheme={toggleTheme}
-		/>
+  <main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <HeaderSection
+      {authStatus}
+      {loadingStartAfterAuth}
+      {isDark}
+      onAuthStatusChange={refreshStatus}
+      onToggleTheme={toggleTheme} />
 
-		<DashboardNotice bind:this={dashboardNoticeRef} autoDismissMs={successNoticeAutoDismissMs} />
+    <DashboardNotice bind:this={dashboardNoticeRef} autoDismissMs={successNoticeAutoDismissMs} />
 
-		<SummaryCardsSection
-			{minerStatus}
-			summary={analytics?.summary ?? null}
-			startDisabled={startMinerDisabled}
-			stopDisabled={stopMinerDisabled}
-			actionPhase={quickActionsActionPhase}
-			onStart={handleStartMiner}
-			onStop={handleStopMiner}
-		/>
+    <SummaryCardsSection
+      {minerStatus}
+      summary={analytics?.summary ?? null}
+      startDisabled={startMinerDisabled}
+      stopDisabled={stopMinerDisabled}
+      actionPhase={quickActionsActionPhase}
+      onStart={handleStartMiner}
+      onStop={handleStopMiner} />
 
-		<section>
-			<PointsOverview
-				{analytics}
-				loading={analyticsLoading}
-				errorMessage={analyticsErrorMessage}
-				controls={analyticsControls}
-				streamerRuntimeStates={minerStatus.streamerRuntimeStates}
-				minerRunning={minerStatus.running}
-				onControlChange={handleChannelPointsControlChange}
-			/>
-		</section>
+    <section>
+      <PointsOverview
+        {analytics}
+        loading={analyticsLoading}
+        errorMessage={analyticsErrorMessage}
+        controls={analyticsControls}
+        streamerRuntimeStates={minerStatus.streamerRuntimeStates}
+        minerRunning={minerStatus.running}
+        onControlChange={handleChannelPointsControlChange} />
+    </section>
 
-		<ChannelPointsInsightsSection streamers={streamerActivity} events={recentEvents} />
+    <ChannelPointsInsightsSection streamers={streamerActivity} events={recentEvents} />
+  </main>
 
-	</main>
-
-	<footer class="border-t border-border/60">
-		<div class="mx-auto flex w-full max-w-6xl justify-center px-4 py-4 sm:px-6 lg:px-8">
-			<Button
-				href="https://github.com/jackra1n/Lurk"
-				target="_blank"
-				rel="noreferrer noopener"
-				variant="ghost"
-				size="sm"
-				class="text-muted-foreground hover:text-foreground"
-				aria-label="Open Lurk source code on GitHub"
-			>
-				<Github class="size-4" />
-				Source Code
-			</Button>
-		</div>
-	</footer>
+  <footer class="border-t border-border/60">
+    <div class="mx-auto flex w-full max-w-6xl justify-center px-4 py-4 sm:px-6 lg:px-8">
+      <Button
+        href="https://github.com/jackra1n/Lurk"
+        target="_blank"
+        rel="noreferrer noopener"
+        variant="ghost"
+        size="sm"
+        class="text-muted-foreground hover:text-foreground"
+        aria-label="Open Lurk source code on GitHub">
+        <Github class="size-4" />
+        Source Code
+      </Button>
+    </div>
+  </footer>
 </div>

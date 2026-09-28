@@ -1,36 +1,36 @@
 <script lang="ts">
-	import { cn, type WithElementRef } from "$lib/utils.js";
-	import type { HTMLAttributes } from "svelte/elements";
-	import ChartStyle from "./chart-style.svelte";
-	import { setChartContext, type ChartConfig } from "./chart-utils.js";
+  import { cn, type WithElementRef } from '$lib/utils.js';
+  import type { HTMLAttributes } from 'svelte/elements';
+  import ChartStyle from './chart-style.svelte';
+  import { setChartContext, type ChartConfig } from './chart-utils.js';
 
-	const uid = $props.id();
+  const uid = $props.id();
 
-	let {
-		ref = $bindable(null),
-		id = uid,
-		class: className,
-		children,
-		config,
-		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLElement>> & {
-		config: ChartConfig;
-	} = $props();
+  let {
+    ref = $bindable(null),
+    id = uid,
+    class: className,
+    children,
+    config,
+    ...restProps
+  }: WithElementRef<HTMLAttributes<HTMLElement>> & {
+    config: ChartConfig;
+  } = $props();
 
-	const chartId = `chart-${id || uid.replace(/:/g, "")}`;
+  const chartId = `chart-${id || uid.replace(/:/g, '')}`;
 
-	setChartContext({
-		get config() {
-			return config;
-		},
-	});
+  setChartContext({
+    get config() {
+      return config;
+    }
+  });
 </script>
 
 <div
-	bind:this={ref}
-	data-chart={chartId}
-	data-slot="chart"
-	class={cn(
+  bind:this={ref}
+  data-chart={chartId}
+  data-slot="chart"
+  class={cn(
 		"flex aspect-video justify-center overflow-visible text-xs",
 		// Overrides
 		//
@@ -73,8 +73,7 @@
 		"[&_.lc-root-container]:w-full",
 		className
 	)}
-	{...restProps}
->
-	<ChartStyle id={chartId} {config} />
-	{@render children?.()}
+  {...restProps}>
+  <ChartStyle id={chartId} {config} />
+  {@render children?.()}
 </div>

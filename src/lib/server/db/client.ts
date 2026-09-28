@@ -24,14 +24,14 @@ export const db = drizzle(sqlite, { schema });
 let initialized = false;
 
 export const initializeDatabase = () => {
-	if (initialized) {
-		return db;
-	}
+  if (initialized) {
+    return db;
+  }
 
-	migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-	initialized = true;
-	logger.info({ path: DB_PATH, migrations: MIGRATIONS_DIR }, 'Database initialized with Drizzle migrations');
-	return db;
+  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  initialized = true;
+  logger.info({ path: DB_PATH, migrations: MIGRATIONS_DIR }, 'Database initialized with Drizzle migrations');
+  return db;
 };
 
 export const getDatabase = () => initializeDatabase();

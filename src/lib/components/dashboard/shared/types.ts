@@ -4,28 +4,28 @@ export type DashboardNoticeState = { kind: 'error' | 'success'; text: string };
 export type LifecycleReason = 'missing_token' | 'invalid_token' | 'auth_pending' | 'startup_failed' | null;
 
 export interface AuthStatusResponse {
-	authenticated: boolean;
-	userId: string | null;
-	username: string | null;
-	pendingLogin: boolean;
-	userCode: string | null;
-	verificationUri: string | null;
-	expiresAt: string | null;
+  authenticated: boolean;
+  userId: string | null;
+  username: string | null;
+  pendingLogin: boolean;
+  userCode: string | null;
+  verificationUri: string | null;
+  expiresAt: string | null;
 }
 
 export interface MinerStatusResponse {
-	running: boolean;
-	lifecycle: MinerLifecycle;
-	reason: LifecycleReason;
-	configuredStreamers: string[];
-	streamerRuntimeStates: StreamerRuntimeState[];
+  running: boolean;
+  lifecycle: MinerLifecycle;
+  reason: LifecycleReason;
+  configuredStreamers: string[];
+  streamerRuntimeStates: StreamerRuntimeState[];
 }
 
 export interface StreamerRuntimeState {
-	login: string;
-	isOnline: boolean;
-	isWatched: boolean;
-	channelPointsDisabled: boolean;
+  login: string;
+  isOnline: boolean;
+  isWatched: boolean;
+  channelPointsDisabled: boolean;
 }
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';
@@ -33,94 +33,94 @@ export type SortDir = 'asc' | 'desc';
 export type ChannelPointsRangeSelection = '24h' | '7d' | '30d' | 'calendar';
 
 export interface ChannelPointsControls {
-	sortBy: ChannelPointsSortBy;
-	sortDir: SortDir;
-	rangeFromMs: number;
-	rangeToMs: number;
-	rangeSelection: ChannelPointsRangeSelection;
+  sortBy: ChannelPointsSortBy;
+  sortDir: SortDir;
+  rangeFromMs: number;
+  rangeToMs: number;
+  rangeSelection: ChannelPointsRangeSelection;
 }
 
 export type ChannelPointsControlChange =
-	| {
-			type: 'sortBy';
-			value: ChannelPointsSortBy;
-	  }
-	| {
-			type: 'toggleSortDir';
-	  }
-	| {
-			type: 'selectStreamer';
-			login: string;
-	  }
-	| {
-			type: 'range';
-			fromMs: number;
-			toMs: number;
-			selection: ChannelPointsRangeSelection;
-	  };
+  | {
+      type: 'sortBy';
+      value: ChannelPointsSortBy;
+    }
+  | {
+      type: 'toggleSortDir';
+    }
+  | {
+      type: 'selectStreamer';
+      login: string;
+    }
+  | {
+      type: 'range';
+      fromMs: number;
+      toMs: number;
+      selection: ChannelPointsRangeSelection;
+    };
 
 export interface StreamerAnalyticsItem {
-	streamerId: number | null;
-	login: string;
-	latestBalance: number;
-	pointsEarned: number;
-	lastActiveAtMs: number | null;
-	lastWatchedAtMs: number | null;
+  streamerId: number | null;
+  login: string;
+  latestBalance: number;
+  pointsEarned: number;
+  lastActiveAtMs: number | null;
+  lastWatchedAtMs: number | null;
 }
 
 export interface ChannelPointSample {
-	timestampMs: number;
-	balance: number;
+  timestampMs: number;
+  balance: number;
 }
 
 export interface ChannelPointsAnalyticsSummary {
-	trackedChannels: number;
-	pointsEarnedThisSession: number;
+  trackedChannels: number;
+  pointsEarnedThisSession: number;
 }
 
 export interface ChannelPointsAnalyticsResponse {
-	success: boolean;
-	range: {
-		fromMs: number;
-		toMs: number;
-	};
-	sort: {
-		by: ChannelPointsSortBy;
-		dir: SortDir;
-	};
-	summary: ChannelPointsAnalyticsSummary;
-	streamers: StreamerAnalyticsItem[];
-	selectedStreamerLogin: string | null;
-	timeline: ChannelPointSample[];
+  success: boolean;
+  range: {
+    fromMs: number;
+    toMs: number;
+  };
+  sort: {
+    by: ChannelPointsSortBy;
+    dir: SortDir;
+  };
+  summary: ChannelPointsAnalyticsSummary;
+  streamers: StreamerAnalyticsItem[];
+  selectedStreamerLogin: string | null;
+  timeline: ChannelPointSample[];
 }
 
 export interface StreamerActivityItem {
-	login: string;
-	onlineMinutes: number;
-	watchedMinutes: number;
+  login: string;
+  onlineMinutes: number;
+  watchedMinutes: number;
 }
 
 export type ChannelPointsRecentEventKind =
-	| 'points_watch'
-	| 'points_claim'
-	| 'stream_online'
-	| 'stream_offline'
-	| 'watch_started'
-	| 'watch_stopped'
-	| 'other';
+  | 'points_watch'
+  | 'points_claim'
+  | 'stream_online'
+  | 'stream_offline'
+  | 'watch_started'
+  | 'watch_stopped'
+  | 'other';
 
 export interface ChannelPointsRecentEventItem {
-	id: string;
-	login: string;
-	occurredAtMs: number;
-	kind: ChannelPointsRecentEventKind;
-	reasonCode: string | null;
-	pointsDelta: number | null;
+  id: string;
+  login: string;
+  occurredAtMs: number;
+  kind: ChannelPointsRecentEventKind;
+  reasonCode: string | null;
+  pointsDelta: number | null;
 }
 
 export interface StreamerActivityResponse {
-	success: boolean;
-	days: number;
-	streamers: StreamerActivityItem[];
-	events: ChannelPointsRecentEventItem[];
+  success: boolean;
+  days: number;
+  streamers: StreamerActivityItem[];
+  events: ChannelPointsRecentEventItem[];
 }

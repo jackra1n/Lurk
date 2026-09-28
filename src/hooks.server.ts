@@ -8,34 +8,34 @@ let initialized = false;
 const logger = getLogger('Hooks');
 
 async function initializeMiner(): Promise<void> {
-	if (initialized) return;
-	initialized = true;
+  if (initialized) return;
+  initialized = true;
 
-	logger.info('Initializing Twitch Points Miner...');
-	eventStore.initialize();
-	if (!getAutoStartMiner()) {
-		logger.warn({ startup: 'disabled' }, 'Miner initialization skipped (auto-start disabled)');
-		return;
-	}
+  logger.info('Initializing Twitch Points Miner...');
+  eventStore.initialize();
+  if (!getAutoStartMiner()) {
+    logger.warn({ startup: 'disabled' }, 'Miner initialization skipped (auto-start disabled)');
+    return;
+  }
 
-	const result = await minerService.start();
-	if (result.success) {
-		logger.info({ startup: result.reason }, 'Miner initialization completed');
-		return;
-	}
+  const result = await minerService.start();
+  if (result.success) {
+    logger.info({ startup: result.reason }, 'Miner initialization completed');
+    return;
+  }
 
-	if (result.reason === 'missing_token' || result.reason === 'invalid_token') {
-		logger.warn({ startup: 'auth_required', reason: result.reason }, 'Miner initialization skipped');
-		return;
-	}
+  if (result.reason === 'missing_token' || result.reason === 'invalid_token') {
+    logger.warn({ startup: 'auth_required', reason: result.reason }, 'Miner initialization skipped');
+    return;
+  }
 
-	logger.error({ startup: 'error', reason: result.reason }, 'Miner initialization failed');
+  logger.error({ startup: 'error', reason: result.reason }, 'Miner initialization failed');
 }
 
 initializeMiner().catch((err) => {
-	logger.error({ err }, 'Failed to initialize miner');
+  logger.error({ err }, 'Failed to initialize miner');
 });
 
 export const handle: Handle = async ({ event, resolve }) => {
-	return resolve(event);
+  return resolve(event);
 };

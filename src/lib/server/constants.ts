@@ -11,80 +11,77 @@ export const OAUTH_SCOPES = 'channel_read chat:read user_blocks_edit user_blocks
 
 // User agent for Android TV client
 export const USER_AGENT =
-	'Mozilla/5.0 (Linux; Android 7.1; Smart Box C1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (Linux; Android 7.1; Smart Box C1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36';
 
 export const GQL_OPERATIONS = {
-	ClaimCommunityPoints: {
-		operationName: 'ClaimCommunityPoints',
-		extensions: {
-			persistedQuery: {
-				version: 1,
-				sha256Hash: '46aaeebe02c99afdf4fc97c7c0cba964124bf6b0af229395f1f6d1feed05b3d0'
-			}
-		}
-	},
-	GetIDFromLogin: {
-		operationName: 'GetIDFromLogin',
-		extensions: {
-			persistedQuery: {
-				version: 1,
-				sha256Hash: '94e82a7b1e3c21e186daa73ee2afc4b8f23bade1fbbff6fe8ac133f50a2f58ca'
-			}
-		}
-	},
-	ChannelPointsContext: {
-		operationName: 'ChannelPointsContext',
-		extensions: {
-			persistedQuery: {
-				version: 1,
-				sha256Hash: '1530a003a7d374b0380b79db0be0534f30ff46e61cffa2bc0e2468a909fbc024'
-			}
-		}
-	},
-	VideoPlayerStreamInfoOverlayChannel: {
-		operationName: 'VideoPlayerStreamInfoOverlayChannel',
-		extensions: {
-			persistedQuery: {
-				version: 1,
-				sha256Hash: '198492e0857f6aedead9665c81c5a06d67b25b58034649687124083ff288597d'
-			}
-		}
-	},
-	PlaybackAccessToken: {
-		operationName: 'PlaybackAccessToken',
-		extensions: {
-			persistedQuery: {
-				version: 1,
-				sha256Hash: '3093517e37e4f4cb48906155bcd894150aef92617939236d2508f3375ab732ce'
-			}
-		}
-	}
+  ClaimCommunityPoints: {
+    operationName: 'ClaimCommunityPoints',
+    extensions: {
+      persistedQuery: {
+        version: 1,
+        sha256Hash: '46aaeebe02c99afdf4fc97c7c0cba964124bf6b0af229395f1f6d1feed05b3d0'
+      }
+    }
+  },
+  GetIDFromLogin: {
+    operationName: 'GetIDFromLogin',
+    extensions: {
+      persistedQuery: {
+        version: 1,
+        sha256Hash: '94e82a7b1e3c21e186daa73ee2afc4b8f23bade1fbbff6fe8ac133f50a2f58ca'
+      }
+    }
+  },
+  ChannelPointsContext: {
+    operationName: 'ChannelPointsContext',
+    extensions: {
+      persistedQuery: {
+        version: 1,
+        sha256Hash: '1530a003a7d374b0380b79db0be0534f30ff46e61cffa2bc0e2468a909fbc024'
+      }
+    }
+  },
+  VideoPlayerStreamInfoOverlayChannel: {
+    operationName: 'VideoPlayerStreamInfoOverlayChannel',
+    extensions: {
+      persistedQuery: {
+        version: 1,
+        sha256Hash: '198492e0857f6aedead9665c81c5a06d67b25b58034649687124083ff288597d'
+      }
+    }
+  },
+  PlaybackAccessToken: {
+    operationName: 'PlaybackAccessToken',
+    extensions: {
+      persistedQuery: {
+        version: 1,
+        sha256Hash: '3093517e37e4f4cb48906155bcd894150aef92617939236d2508f3375ab732ce'
+      }
+    }
+  }
 } as const;
 
-export type PubSubTopicType =
-	| 'community-points-user-v1'
-	| 'video-playback-by-id'
-	| 'raid';
+export type PubSubTopicType = 'community-points-user-v1' | 'video-playback-by-id' | 'raid';
 
 export interface PubSubMessage {
-	type: 'PONG' | 'RESPONSE' | 'MESSAGE' | 'RECONNECT';
-	nonce?: string;
-	error?: string;
-	data?: {
-		topic: string;
-		message: string;
-	};
+  type: 'PONG' | 'RESPONSE' | 'MESSAGE' | 'RECONNECT';
+  nonce?: string;
+  error?: string;
+  data?: {
+    topic: string;
+    message: string;
+  };
 }
 
 export interface PubSubListenRequest {
-	type: 'LISTEN';
-	nonce: string;
-	data: {
-		topics: string[];
-		auth_token?: string;
-	};
+  type: 'LISTEN';
+  nonce: string;
+  data: {
+    topics: string[];
+    auth_token?: string;
+  };
 }
 
 export interface PubSubPingRequest {
-	type: 'PING';
+  type: 'PING';
 }

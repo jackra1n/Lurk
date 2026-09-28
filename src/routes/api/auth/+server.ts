@@ -6,54 +6,51 @@ import { getLogger } from '$lib/server/logger';
 const logger = getLogger('AuthAPI');
 
 export const GET: RequestHandler = async () => {
-	const status = twitchAuth.getStatus();
-	return json(status);
+  const status = twitchAuth.getStatus();
+  return json(status);
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	const body = await request.json();
-	const { action } = body;
+  const body = await request.json();
+  const { action } = body;
 
-	switch (action) {
-		case 'startLogin': {
-			try {
-				const deviceCode = await twitchAuth.startDeviceFlow();
+  switch (action) {
+    case 'startLogin': {
+      try {
+        const deviceCode = await twitchAuth.startDeviceFlow();
 
-				// Start polling in the background
-				twitchAuth.pollForToken(deviceCode).catch((error) => {
-					logger.error({ err: error }, 'Login failed');
-				});
+        // Start polling in the background
+        twitchAuth.pollForToken(deviceCode).catch((error) => {
+          logger.error({ err: error }, 'Login failed');
+        });
 
-				return json({
-					success: true,
-					userCode: deviceCode.user_code,
-					verificationUri: deviceCode.verification_uri,
-					expiresIn: deviceCode.expires_in
-				});
-			} catch (error) {
-				return json(
-					{ success: false, message: String(error) },
-					{ status: 500 }
-				);
-			}
-		}
+        return json({
+          success: true,
+          userCode: deviceCode.user_code,
+          verificationUri: deviceCode.verification_uri,
+          expiresIn: deviceCode.expires_in
+        });
+      } catch (error) {
+        return json({ success: false, message: String(error) }, { status: 500 });
+      }
+    }
 
-		case 'cancelLogin': {
-			twitchAuth.cancelPendingAuth();
-			return json({ success: true, message: 'Login cancelled' });
-		}
+    case 'cancelLogin': {
+      twitchAuth.cancelPendingAuth();
+      return json({ success: true, message: 'Login cancelled' });
+    }
 
-		case 'validate': {
-			const isValid = await twitchAuth.validateToken();
-			return json({ success: true, valid: isValid });
-		}
+    case 'validate': {
+      const isValid = await twitchAuth.validateToken();
+      return json({ success: true, valid: isValid });
+    }
 
-		case 'logout': {
-			twitchAuth.logout();
-			return json({ success: true, message: 'Logged out' });
-		}
+    case 'logout': {
+      twitchAuth.logout();
+      return json({ success: true, message: 'Logged out' });
+    }
 
-		default:
-			return json({ success: false, message: 'Unknown action' }, { status: 400 });
-	}
+    default:
+      return json({ success: false, message: 'Unknown action' }, { status: 400 });
+  }
 };

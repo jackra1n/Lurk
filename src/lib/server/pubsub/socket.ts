@@ -22,7 +22,7 @@ export class PubSubSocket {
   private isConnected = false;
   private forcedClose = false;
   private topicAuthByName = new Map<string, boolean>();
-  private subscribedTopics = new Set<string>();
+  private subscribedTopics = new Map<string, boolean>();
   private pendingListens = new Map<string, PendingListen>();
 
   constructor(options: PubSubSocketOptions) {
@@ -50,6 +50,10 @@ export class PubSubSocket {
 
   isConnectedToPubSub() {
     return this.isConnected;
+  }
+
+  isSubscribed(topic: string, requiresAuth: boolean = false) {
+    return this.subscribedTopics.has(topic) && (!requiresAuth || this.subscribedTopics.get(topic) === true);
   }
 
   async connect() {
@@ -145,31 +149,19 @@ export class PubSubSocket {
 
     this.topicAuthByName.set(topic, nextRequiresAuth);
 
-    if (this.subscribedTopics.has(topic)) return;
+    if (this.isSubscribed(topic, nextRequiresAuth)) return;
+    const ws = this.ws;
 
     try {
       await this.sendListen(topic, nextRequiresAuth);
-      this.subscribedTopics.add(topic);
+      if (this.ws !== ws || !this.isConnected) throw new Error('Socket changed while subscribing');
+      this.subscribedTopics.set(topic, nextRequiresAuth);
     } catch (error) {
       if (!wasKnownTopic) {
         this.topicAuthByName.delete(topic);
       }
       this.subscribedTopics.delete(topic);
       throw error;
-    }
-  }
-
-  private async replayTopics() {
-    if (this.topicAuthByName.size === 0) return;
-
-    for (const [topic, requiresAuth] of this.topicAuthByName.entries()) {
-      try {
-        await this.sendListen(topic, requiresAuth);
-        this.subscribedTopics.add(topic);
-        logger.info({ socketId: this.id, topic }, 'Re-subscribed to topic');
-      } catch (error) {
-        logger.error({ socketId: this.id, topic, err: error }, 'Failed to re-subscribe to topic');
-      }
     }
   }
 
@@ -340,7 +332,6 @@ export class PubSubSocket {
 
       try {
         await this.connect();
-        await this.replayTopics();
       } catch (error) {
         logger.error({ socketId: this.id, err: error }, 'Reconnection failed');
         this.scheduleReconnect();

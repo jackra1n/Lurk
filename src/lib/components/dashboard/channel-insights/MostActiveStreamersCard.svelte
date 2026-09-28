@@ -104,15 +104,13 @@
 					}}>
           {#snippet tooltip()}
             {#snippet hoursTooltip({
-							item,
-							index,
-							payload
+							data,
+							index
 						}: {
-							item: { payload?: { watchedHours?: number; onlineHours?: number } };
+							data: unknown;
 							index: number;
-							payload: Array<{ payload?: { watchedHours?: number; onlineHours?: number } }>;
 						})}
-              {@const row = (item.payload ?? payload[0]?.payload) as
+              {@const row = data as
 								| { watchedHours?: number; onlineHours?: number }
 								| undefined}
               {#if index === 0 && row}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Github from '@lucide/svelte/icons/github';
+  import CodeXml from '@lucide/svelte/icons/code-xml';
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import HeaderSection from '../header/HeaderSection.svelte';
@@ -532,7 +532,7 @@
         size="sm"
         class="text-muted-foreground hover:text-foreground"
         aria-label="Open Lurk source code on GitHub">
-        <Github class="size-4" />
+        <CodeXml class="size-4" />
         Source Code
       </Button>
     </div>

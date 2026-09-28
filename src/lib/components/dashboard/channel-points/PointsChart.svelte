@@ -135,13 +135,7 @@
 				]}
         props={{
 					xAxis: { format: formatXAxisTick, ticks: getXAxisTicks, tickSpacing: 112 },
-					yAxis: { format: formatYAxisTick, tickSpacing: 56 },
-					area: {
-						curve: curveLinear,
-						'fill-opacity': 0.4,
-						line: { class: 'stroke-1' },
-						motion: 'tween'
-					}
+					yAxis: { format: formatYAxisTick, tickSpacing: 56 }
 				}}
         grid
         axis>
@@ -157,8 +151,8 @@
 							});
 						}} />
         {/snippet}
-        {#snippet marks({ series, getAreaProps })}
-          {#each series as s, i (s.key)}
+        {#snippet marks({ context })}
+          {#each context.series.visibleSeries as s (s.key)}
             <LinearGradient
               stops={[
 								s.color ?? '',
@@ -166,7 +160,13 @@
 							]}
               vertical>
               {#snippet children({ gradient })}
-                <Area {...getAreaProps(s, i)} fill={gradient} />
+                <Area
+                  seriesKey={s.key}
+                  curve={curveLinear}
+                  fill-opacity={0.4}
+                  line={{ class: 'stroke-1', stroke: s.color }}
+                  motion="tween"
+                  fill={gradient} />
               {/snippet}
             </LinearGradient>
           {/each}

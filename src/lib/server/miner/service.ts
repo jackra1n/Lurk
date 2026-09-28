@@ -236,11 +236,11 @@ export class MinerService {
       if (!this.running || generation !== this.metadataLoopGeneration) {
         throw new Error('Miner startup interrupted');
       }
-      await subscribeToPointsTopic(this.userId);
+      subscribeToPointsTopic(this.userId);
 
       for (const [, state] of this.streamerStates) {
         if (state.channelId) {
-          await subscribeToStreamer(state);
+          subscribeToStreamer(state);
         }
       }
 

@@ -481,7 +481,7 @@ describe('stream metadata scheduling', () => {
     const original = [...configured];
     const states = new Map<string, StreamerState>();
     const lookup = vi.spyOn(twitchClient, 'getUserId').mockResolvedValue(null);
-    const listen = vi.spyOn(twitchPubSubPool, 'listen').mockResolvedValue(undefined);
+    const listen = vi.spyOn(twitchPubSubPool, 'listen').mockImplementation(() => {});
     const register = vi.spyOn(eventStore, 'registerStreamer').mockImplementation(() => {});
     try {
       configured.splice(0, configured.length, 'discovery-recovery');

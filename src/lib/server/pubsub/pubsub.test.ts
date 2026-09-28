@@ -125,9 +125,10 @@ describe('TwitchPubSub pool', () => {
     const pubsub = createPubSub(2);
 
     await pubsub.connect();
-    await pubsub.listen('video-playback-by-id.1');
-    await pubsub.listen('video-playback-by-id.2');
-    await pubsub.listen('video-playback-by-id.3');
+    pubsub.listen('video-playback-by-id.1');
+    pubsub.listen('video-playback-by-id.2');
+    pubsub.listen('video-playback-by-id.3');
+    await setImmediate();
 
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(pubsub.getTopics().sort()).toEqual([
@@ -143,8 +144,10 @@ describe('TwitchPubSub pool', () => {
     const pubsub = createPubSub();
 
     await pubsub.connect();
-    await pubsub.listen('community-points-user-v1.123', true);
-    await pubsub.listen('community-points-user-v1.123', true);
+    pubsub.listen('community-points-user-v1.123', true);
+    await setImmediate();
+    pubsub.listen('community-points-user-v1.123', true);
+    await setImmediate();
 
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0].listenTopics).toEqual(['community-points-user-v1.123']);
@@ -157,7 +160,8 @@ describe('TwitchPubSub pool', () => {
 
     pubsub.setAuthToken('token-abc');
     await pubsub.connect();
-    await pubsub.listen('community-points-user-v1.456', true);
+    pubsub.listen('community-points-user-v1.456', true);
+    await setImmediate();
 
     expect(FakeWebSocket.instances[0].listenAuthTokens).toEqual(['token-abc']);
 
@@ -174,7 +178,8 @@ describe('TwitchPubSub pool', () => {
       pubsub.setAuthToken('old-token');
       await pubsub.connect();
       FakeWebSocket.rejectListens = true;
-      await expect(pubsub.listen(topic, requiresAuth)).rejects.toBeInstanceOf(Error);
+      pubsub.listen(topic, requiresAuth);
+      await setImmediate();
       expect(FakeWebSocket.instances[0].listenTopics).toEqual([topic]);
       pubsub.setAuthToken('new-token');
       FakeWebSocket.rejectListens = false;
@@ -198,7 +203,8 @@ describe('TwitchPubSub pool', () => {
     const topic = 'video-playback-by-id.reconnect';
     try {
       await pubsub.connect();
-      await pubsub.listen(topic);
+      pubsub.listen(topic);
+      await setImmediate();
       FakeWebSocket.rejectListens = true;
       FakeWebSocket.instances[0].close();
       await advanceTime(1_000);
@@ -221,10 +227,11 @@ describe('TwitchPubSub pool', () => {
     try {
       await pubsub.connect();
       FakeWebSocket.rejectListens = true;
-      await expect(pubsub.listen(topic)).rejects.toBeInstanceOf(Error);
+      pubsub.listen(topic);
+      await setImmediate();
       let attempts = 1;
       for (const delay of [30_000, 60_000, 120_000, 240_000, 300_000, 300_000]) {
-        await expect(pubsub.listen(topic)).rejects.toBeInstanceOf(Error);
+        pubsub.listen(topic);
         await advanceTime(delay - 1);
         expect(FakeWebSocket.instances.flatMap((ws) => ws.listenTopics)).toHaveLength(attempts);
         await advanceTime(1);
@@ -248,20 +255,19 @@ describe('TwitchPubSub pool', () => {
     try {
       await pubsub.connect();
       FakeWebSocket.holdListens = true;
-      const first = pubsub.listen(oldTopic);
-      const second = pubsub.listen(oldTopic);
-      const outcomes = Promise.allSettled([first, second]);
+      pubsub.listen(oldTopic);
+      pubsub.listen(oldTopic);
       await setImmediate();
       expect(FakeWebSocket.instances[0].listenTopics).toEqual([oldTopic]);
       pubsub.disconnect();
-      expect((await outcomes).map((result) => result.status)).toEqual(['rejected', 'rejected']);
       await advanceTime(300_000);
       expect(FakeWebSocket.instances).toHaveLength(1);
       expect(pubsub.getTopics()).toEqual([]);
 
       FakeWebSocket.holdListens = false;
       await pubsub.connect();
-      await pubsub.listen('community-points-user-v1.new', true);
+      pubsub.listen('community-points-user-v1.new', true);
+      await setImmediate();
       await advanceTime(300_000);
       expect(FakeWebSocket.instances[1].listenTopics).toEqual(['community-points-user-v1.new']);
       expect(pubsub.getTopics()).toEqual(['community-points-user-v1.new']);
@@ -277,8 +283,9 @@ describe('TwitchPubSub pool', () => {
     try {
       await pubsub.connect();
       pubsub.setAuthToken('old-token');
-      await pubsub.listen('community-points-user-v1.scale', true);
-      for (let i = 0; i < 350; i++) await pubsub.listen(`video-playback-by-id.${i}`);
+      pubsub.listen('community-points-user-v1.scale', true);
+      for (let i = 0; i < 350; i++) pubsub.listen(`video-playback-by-id.${i}`);
+      await setImmediate();
       const originals = [...FakeWebSocket.instances];
       FakeWebSocket.holdListens = true;
       pubsub.setAuthToken('new-token');
@@ -317,7 +324,8 @@ describe('TwitchPubSub pool', () => {
     const topics = ['video-playback-by-id.first', 'video-playback-by-id.second'];
     try {
       await pubsub.connect();
-      for (const topic of topics) await pubsub.listen(topic);
+      for (const topic of topics) pubsub.listen(topic);
+      await setImmediate();
       FakeWebSocket.failNextListen = true;
       FakeWebSocket.instances[0].close();
       await advanceTime(1);
@@ -339,7 +347,8 @@ describe('TwitchPubSub pool', () => {
     const topic = 'video-playback-by-id.backoff';
     try {
       await pubsub.connect();
-      await pubsub.listen(topic);
+      pubsub.listen(topic);
+      await setImmediate();
       FakeWebSocket.rejectListens = true;
       FakeWebSocket.instances[0].close();
       await advanceTime(1);
@@ -367,7 +376,8 @@ describe('TwitchPubSub pool', () => {
     const topics = ['video-playback-by-id.first', 'video-playback-by-id.second'];
     try {
       await pubsub.connect();
-      for (const topic of topics) await pubsub.listen(topic);
+      for (const topic of topics) pubsub.listen(topic);
+      await setImmediate();
       FakeWebSocket.holdListens = true;
       FakeWebSocket.instances[0].close();
       await advanceTime(1);
@@ -411,7 +421,8 @@ describe('TwitchPubSub pool', () => {
       pubsub.onDisconnected(() => states.push(pubsub.isConnectedToPubSub()));
       try {
         await pubsub.connect();
-        await pubsub.listen('video-playback-by-id.status');
+        pubsub.listen('video-playback-by-id.status');
+        await setImmediate();
         const original = FakeWebSocket.instances[0];
         FakeWebSocket.delayClose = true;
         if (reason === 'server') {
@@ -446,10 +457,11 @@ describe('TwitchPubSub pool', () => {
     const topics = ['video-playback-by-id.a', 'video-playback-by-id.b', 'video-playback-by-id.c'];
     try {
       FakeWebSocket.rejectedTopics.add(topics[0]);
-      const outcomes = await Promise.allSettled(topics.map((topic) => pubsub.listen(topic)));
-      expect(outcomes.map((result) => result.status)).toEqual(['rejected', 'fulfilled', 'fulfilled']);
+      for (const topic of topics) pubsub.listen(topic);
+      await setImmediate();
       expect(FakeWebSocket.instances.map((ws) => ws.listenTopics)).toEqual([topics.slice(0, 2), topics.slice(2)]);
-      await pubsub.listen('video-playback-by-id.d');
+      pubsub.listen('video-playback-by-id.d');
+      await setImmediate();
       expect(FakeWebSocket.instances[1].listenTopics).toEqual([topics[2], 'video-playback-by-id.d']);
       FakeWebSocket.rejectedTopics.clear();
       await advanceTime(30_000);
@@ -468,14 +480,16 @@ describe('TwitchPubSub pool', () => {
     const fresh = 'video-playback-by-id.fresh';
     try {
       FakeWebSocket.rejectedTopics.add(old);
-      await expect(pubsub.listen(old)).rejects.toBeInstanceOf(Error);
+      pubsub.listen(old);
+      await setImmediate();
       await advanceTime(30_000);
       await advanceTime(60_000);
       const ws = FakeWebSocket.instances[0];
       expect(ws.listenTopics).toEqual([old, old, old]);
       FakeWebSocket.rejectedTopics.add(fresh);
-      await expect(pubsub.listen(fresh)).rejects.toBeInstanceOf(Error);
-      await pubsub.listen('video-playback-by-id.healthy');
+      pubsub.listen(fresh);
+      pubsub.listen('video-playback-by-id.healthy');
+      await setImmediate();
       await advanceTime(29_999);
       expect(ws.listenTopics).toEqual([old, old, old, fresh, 'video-playback-by-id.healthy']);
       FakeWebSocket.rejectedTopics.delete(fresh);
@@ -492,27 +506,25 @@ describe('TwitchPubSub pool', () => {
     }
   });
 
-  test('waits for an authenticated acknowledgement when auth is upgraded during LISTEN', async () => {
+  test('upgrades auth during LISTEN without duplicating the acknowledged subscription', async () => {
     const pubsub = createPubSub();
     try {
       await pubsub.connect();
       pubsub.setAuthToken('token');
       FakeWebSocket.holdListens = true;
       const topic = 'community-points-user-v1.upgrade';
-      const first = pubsub.listen(topic);
-      let authenticated = false;
-      const upgraded = pubsub.listen(topic, true).then(() => {
-        authenticated = true;
-      });
+      pubsub.listen(topic);
+      pubsub.listen(topic, true);
       const ws = FakeWebSocket.instances[0];
       ws.pendingReplies.shift()?.();
       await setImmediate();
-      expect(authenticated).toBe(false);
       expect(ws.listenTopics).toEqual([topic, topic]);
       expect(ws.listenAuthTokens).toEqual([undefined, 'token']);
       ws.pendingReplies.shift()?.();
-      await Promise.all([first, upgraded]);
-      expect(authenticated).toBe(true);
+      await setImmediate();
+      pubsub.listen(topic, true);
+      await setImmediate();
+      expect(ws.listenAuthTokens).toEqual([undefined, 'token']);
     } finally {
       pubsub.disconnect();
     }
@@ -527,12 +539,14 @@ describe('TwitchPubSub pool', () => {
     try {
       FakeWebSocket.holdOpen = true;
       FakeWebSocket.delayClose = true;
-      const outcomes = Promise.allSettled([pubsub.connect(), pubsub.listen('video-playback-by-id.old')]);
+      const outcomes = Promise.allSettled([pubsub.connect()]);
+      pubsub.listen('video-playback-by-id.old');
       const discarded = FakeWebSocket.instances[0];
       pubsub.disconnect();
-      expect((await outcomes).map((result) => result.status)).toEqual(['rejected', 'rejected']);
+      expect((await outcomes).map((result) => result.status)).toEqual(['rejected']);
       FakeWebSocket.holdOpen = false;
-      await pubsub.listen('video-playback-by-id.new');
+      pubsub.listen('video-playback-by-id.new');
+      await setImmediate();
       discarded.onopen?.({} as Event);
       discarded.onmessage?.({ data: JSON.stringify({ type: 'RECONNECT' }) } as MessageEvent<string>);
       discarded.onerror?.({} as Event);
@@ -560,15 +574,73 @@ describe('TwitchPubSub pool', () => {
       }
     });
     try {
-      await expect(pubsub.listen('video-playback-by-id.retained')).rejects.toBeInstanceOf(Error);
-      const later = pubsub.listen('video-playback-by-id.later');
+      pubsub.listen('video-playback-by-id.retained');
+      pubsub.listen('video-playback-by-id.later');
       await advanceTime(1_000);
-      await later;
       expect(attempts).toBe(2);
       expect(FakeWebSocket.instances[0].listenTopics).toEqual([
         'video-playback-by-id.retained',
         'video-playback-by-id.later'
       ]);
+    } finally {
+      pubsub.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  test('registers topics during reconnect without waiting or reconnecting early', async () => {
+    vi.useFakeTimers();
+    const pubsub = new TwitchPubSubPool({
+      reconnectDelayRangeMs: [60_000, 60_000],
+      socketFactory: (url) => new FakeWebSocket(url)
+    });
+    const first = 'video-playback-by-id.original';
+    const later = 'video-playback-by-id.later';
+    try {
+      await pubsub.connect();
+      pubsub.listen(first);
+      await setImmediate();
+      FakeWebSocket.instances[0].close();
+      expect(pubsub.listen(later)).toBeUndefined();
+      expect(pubsub.getTopics()).toEqual([first, later]);
+      await advanceTime(59_999);
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(pubsub.isConnectedToPubSub()).toBe(false);
+      await advanceTime(1);
+      expect(FakeWebSocket.instances[1].listenTopics).toEqual([first, later]);
+      expect(pubsub.isConnectedToPubSub()).toBe(true);
+    } finally {
+      pubsub.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  test('revisits an auth upgrade after sync has moved to a later topic', async () => {
+    vi.useFakeTimers();
+    const pubsub = createPubSub();
+    const first = 'community-points-user-v1.upgrade';
+    const later = 'video-playback-by-id.later';
+    try {
+      await pubsub.connect();
+      pubsub.setAuthToken('current-token');
+      FakeWebSocket.holdListens = true;
+      pubsub.listen(first);
+      pubsub.listen(later);
+      const ws = FakeWebSocket.instances[0];
+      expect(ws.listenTopics).toEqual([first]);
+      ws.pendingReplies.shift()?.();
+      await setImmediate();
+      expect(ws.listenTopics).toEqual([first, later]);
+      pubsub.listen(first, true);
+      ws.pendingReplies.shift()?.();
+      await setImmediate();
+      await advanceTime(1);
+      expect(ws.listenTopics).toEqual([first, later, first]);
+      expect(ws.listenAuthTokens).toEqual([undefined, undefined, 'current-token']);
+      ws.pendingReplies.shift()?.();
+      await setImmediate();
+      await advanceTime(60_000);
+      expect(ws.listenTopics).toEqual([first, later, first]);
     } finally {
       pubsub.disconnect();
       vi.useRealTimers();

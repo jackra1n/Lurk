@@ -45,7 +45,7 @@ export class TwitchPubSubPool {
   }
 
   async connect() {
-    const socket = this.findConnectedSocket() ?? this.findAnySocket() ?? this.createSocket();
+    const socket = this.findConnectedSocket() ?? this.sockets.values().next().value ?? this.createSocket();
     await socket.connect();
   }
 
@@ -60,14 +60,14 @@ export class TwitchPubSubPool {
     this.nextSocketId = 1;
   }
 
-  listen(topic: string, requiresAuth: boolean = false): Promise<void> {
+  listen(topic: string, requiresAuth: boolean = false): void {
     const socketId = this.topicToSocketId.get(topic);
     let socket = socketId === undefined ? undefined : this.sockets.get(socketId);
     if (!socket) {
       socket = this.findSocketWithCapacity() ?? this.createSocket();
       this.topicToSocketId.set(topic, socket.getId());
     }
-    return socket.listen(topic, requiresAuth);
+    socket.listen(topic, requiresAuth);
   }
 
   isConnectedToPubSub() {
@@ -92,12 +92,6 @@ export class TwitchPubSubPool {
   private findConnectedSocket() {
     for (const socket of this.sockets.values()) {
       if (socket.isConnectedToPubSub()) return socket;
-    }
-  }
-
-  private findAnySocket() {
-    for (const socket of this.sockets.values()) {
-      return socket;
     }
   }
 

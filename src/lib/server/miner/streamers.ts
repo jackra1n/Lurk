@@ -120,7 +120,7 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
       if (!state.channelId) {
         state.channelId = await twitchClient.getUserId(name);
         if (state.channelId) {
-          await subscribeToStreamer(state);
+          subscribeToStreamer(state);
           logger.info({ ...streamerContext(state) }, 'Channel ID lookup recovered');
         }
       }
@@ -153,31 +153,20 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
   }
 }
 
-export async function subscribeToPointsTopic(userId: string | null): Promise<void> {
+export function subscribeToPointsTopic(userId: string | null): void {
   if (!userId) {
     logger.warn('No user ID available - skipping user-level PubSub topic');
     logger.info('Claim bonuses will be detected via periodic channel points context checks');
     return;
   }
 
-  try {
-    await twitchPubSubPool.listen(`${PubSubTopicType.CommunityPointsUser}.${userId}`, true);
-    logger.info({ userId }, 'Subscribed to user-level channel points topic');
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to subscribe to user topic');
-    logger.warn('Claim bonuses will be detected via periodic channel points context checks');
-  }
+  twitchPubSubPool.listen(`${PubSubTopicType.CommunityPointsUser}.${userId}`, true);
 }
 
-export async function subscribeToStreamer(state: StreamerState): Promise<void> {
+export function subscribeToStreamer(state: StreamerState): void {
   if (!state.channelId) return;
 
-  try {
-    await twitchPubSubPool.listen(`${PubSubTopicType.VideoPlaybackById}.${state.channelId}`, false);
-    logger.info({ streamer: state.name }, 'Subscribed to stream status');
-  } catch (error) {
-    logger.error({ err: error, streamer: state.name }, 'Failed to subscribe to streamer topic');
-  }
+  twitchPubSubPool.listen(`${PubSubTopicType.VideoPlaybackById}.${state.channelId}`, false);
 }
 
 export function isMetadataCheckDue(state: StreamerState, now: number): boolean {

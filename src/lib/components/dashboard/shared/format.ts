@@ -34,3 +34,7 @@ export const formatPoints = (points: number) => points.toLocaleString('en-GB');
 
 export const formatCompactPoints = (points: number) =>
   points.toLocaleString('en-GB', { notation: 'compact', maximumFractionDigits: 1 });
+
+// Localized display names can differ from the login entirely, so only the capitalization is taken over.
+export const formatStreamerName = (streamer: { login: string; displayName: string | null }) =>
+  streamer.displayName?.toLowerCase() === streamer.login ? streamer.displayName : streamer.login;

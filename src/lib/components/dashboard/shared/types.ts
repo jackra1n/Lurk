@@ -63,6 +63,8 @@ export type ChannelPointsControlChange =
 export interface StreamerAnalyticsItem {
   streamerId: number | null;
   login: string;
+  displayName: string | null;
+  profileImageUrl: string | null;
   latestBalance: number;
   pointsEarned: number;
   lastActiveAtMs: number | null;

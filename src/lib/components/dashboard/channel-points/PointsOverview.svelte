@@ -1,7 +1,9 @@
 <script lang="ts">
+  import ExternalLink from '@lucide/svelte/icons/external-link';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import DateRangePicker from './DateRangePicker.svelte';
+  import { formatPoints, formatStreamerName } from '../shared/format';
   import PointsChart from './PointsChart.svelte';
   import StreamerList from './StreamerList.svelte';
   import { Badge } from '$lib/components/ui/badge';
@@ -54,8 +56,15 @@
           {#if selectedStreamer}
             <span class="inline-flex w-full items-center justify-between gap-2">
               <span class="min-w-0 truncate">
-                {selectedStreamer.login}
-                · {selectedStreamer.latestBalance.toLocaleString()} pts
+                <a
+                  href={`https://www.twitch.tv/${selectedStreamer.login}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  class="inline-flex items-center gap-1 hover:text-foreground hover:underline">
+                  {formatStreamerName(selectedStreamer)}
+                  <ExternalLink class="size-3" />
+                </a>
+                · {formatPoints(selectedStreamer.latestBalance)} pts
               </span>
               {#if selectedStreamerRuntimeState?.channelPointsDisabled}
                 <Tooltip.Root>

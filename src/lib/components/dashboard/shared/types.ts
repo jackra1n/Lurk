@@ -27,6 +27,7 @@ export interface StreamerRuntimeState {
   isOnline: boolean;
   isWatched: boolean;
   channelPointsDisabled: boolean;
+  multiplier: number | null;
 }
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';
@@ -39,6 +40,7 @@ export interface ChannelPointsControls {
   rangeFromMs: number;
   rangeToMs: number;
   rangeSelection: ChannelPointsRangeSelection;
+  allChannels: boolean;
 }
 
 export type ChannelPointsControlChange =
@@ -52,6 +54,9 @@ export type ChannelPointsControlChange =
   | {
       type: 'selectStreamer';
       login: string;
+    }
+  | {
+      type: 'selectAll';
     }
   | {
       type: 'range';
@@ -98,6 +103,16 @@ export interface ChannelPointsAnalyticsResponse {
     live: TimeRange[];
     watched: TimeRange[];
   };
+  earnings: EarningsBuckets | null;
+}
+
+export interface EarningsBucket extends EarningsBreakdown {
+  startMs: number;
+}
+
+export interface EarningsBuckets {
+  bucketMs: number;
+  buckets: EarningsBucket[];
 }
 
 export type ActivityFeedItem =
@@ -163,5 +178,7 @@ export interface DashboardSummaryResponse {
   earnings: {
     last24h: EarningsBreakdown;
     dailyAverage: number | null;
+    allTime: number;
+    sinceMs: number | null;
   };
 }

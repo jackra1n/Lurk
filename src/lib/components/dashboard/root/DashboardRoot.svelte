@@ -93,6 +93,7 @@
   let analyticsRangeFromMs = $state(initialAnalyticsRangeToMs - defaultAnalyticsRangeMs);
   let analyticsRangeSelection = $state<ChannelPointsRangeSelection>('24h');
   let selectedStreamerLogin = $state<string | null>(null);
+  let showAllChannels = $state(false);
   let pollIntervalMs = $state(slowPollMs);
   let minerActionIntent = $state<'start' | 'stop' | null>(null);
   let dashboardNoticeRef: DashboardNoticeHandle | null = null;
@@ -101,7 +102,8 @@
     sortDir: analyticsSortDir,
     rangeFromMs: analyticsRangeFromMs,
     rangeToMs: analyticsRangeToMs,
-    rangeSelection: analyticsRangeSelection
+    rangeSelection: analyticsRangeSelection,
+    allChannels: showAllChannels
   } satisfies ChannelPointsControls);
   let quickActionsActionPhase = $derived<'idle' | 'starting' | 'stopping'>(
     minerStatus.lifecycle === 'starting' ||
@@ -276,7 +278,11 @@
                 login,
                 isOnline: Boolean((value as { isOnline?: unknown }).isOnline),
                 isWatched: Boolean((value as { isWatched?: unknown }).isWatched),
-                channelPointsDisabled: disabledStreamers.has(login)
+                channelPointsDisabled: disabledStreamers.has(login),
+                multiplier:
+                  typeof (value as { multiplier?: unknown }).multiplier === 'number'
+                    ? (value as { multiplier: number }).multiplier
+                    : null
               }
             ];
           })
@@ -294,7 +300,10 @@
       sortDir: analyticsSortDir
     });
 
-    if (selectedStreamerLogin) {
+    if (showAllChannels) {
+      query.set('scope', 'all');
+      query.set('utcOffset', String(-new Date().getTimezoneOffset()));
+    } else if (selectedStreamerLogin) {
       query.set('selectedStreamer', selectedStreamerLogin);
     }
 
@@ -352,7 +361,7 @@
       const nextAnalytics = await fetchChannelPointsAnalytics();
       if (requestSeq !== analyticsRequestSeq) return;
       analytics = nextAnalytics;
-      selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
+      if (!showAllChannels) selectedStreamerLogin = nextAnalytics.selectedStreamerLogin;
       analyticsErrorMessage = null;
     } catch (error) {
       if (requestSeq !== analyticsRequestSeq) return;
@@ -488,8 +497,16 @@
     }
 
     if (change.type === 'selectStreamer') {
-      if (selectedStreamerLogin === change.login) return;
+      if (!showAllChannels && selectedStreamerLogin === change.login) return;
+      showAllChannels = false;
       selectedStreamerLogin = change.login;
+      await refreshAnalytics(true);
+      return;
+    }
+
+    if (change.type === 'selectAll') {
+      if (showAllChannels) return;
+      showAllChannels = true;
       await refreshAnalytics(true);
       return;
     }

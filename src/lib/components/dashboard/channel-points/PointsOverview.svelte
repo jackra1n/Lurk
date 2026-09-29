@@ -4,6 +4,7 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import DateRangePicker from './DateRangePicker.svelte';
   import { formatPoints, formatStreamerName } from '../shared/format';
+  import EarningsChart from './EarningsChart.svelte';
   import PointsChart from './PointsChart.svelte';
   import StreamerList from './StreamerList.svelte';
   import { Badge } from '$lib/components/ui/badge';
@@ -43,6 +44,9 @@
   const selectedStreamerRuntimeState = $derived(
     selectedStreamer ? runtimeStateByLogin.get(selectedStreamer.login) : undefined
   );
+  const totalBalance = $derived(
+    analytics?.streamers.reduce((total, streamer) => total + streamer.latestBalance, 0) ?? 0
+  );
   const channelPointsDisabledTooltip =
     'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
@@ -53,7 +57,9 @@
       <div>
         <CardTitle class="text-lg">Channel Points</CardTitle>
         <CardDescription class="text-sm">
-          {#if selectedStreamer}
+          {#if analytics?.earnings}
+            All channels · {formatPoints(totalBalance)} pts
+          {:else if selectedStreamer}
             <span class="inline-flex w-full items-center justify-between gap-2">
               <span class="min-w-0 truncate">
                 <a
@@ -136,11 +142,15 @@
           {streamerRuntimeStates}
           {minerRunning}
           {onControlChange} />
-        <PointsChart
-          timeline={analytics.timeline}
-          periods={analytics.periods}
-          rangeFromMs={controls.rangeFromMs}
-          rangeToMs={controls.rangeToMs} />
+        {#if analytics.earnings}
+          <EarningsChart earnings={analytics.earnings} />
+        {:else}
+          <PointsChart
+            timeline={analytics.timeline}
+            periods={analytics.periods}
+            rangeFromMs={controls.rangeFromMs}
+            rangeToMs={controls.rangeToMs} />
+        {/if}
       </div>
     {/if}
   </CardContent>

@@ -2,6 +2,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
+  import Layers from '@lucide/svelte/icons/layers';
   import { Badge } from '$lib/components/ui/badge';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import * as Select from '$lib/components/ui/select';
@@ -70,6 +71,10 @@
     offline: 'Offline'
   } satisfies Record<StreamerStatus, string>;
 
+  const totalBalance = $derived(streamers.reduce((total, streamer) => total + streamer.latestBalance, 0));
+  const totalEarned = $derived(streamers.reduce((total, streamer) => total + streamer.pointsEarned, 0));
+  const multiplierTooltip = 'Channel points multiplier, usually from a subscription.';
+
   const channelPointsDisabledTooltip =
     'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
 </script>
@@ -107,7 +112,33 @@
     </Select.Content>
   </Select.Root>
 
-  <ScrollArea class="h-90">
+  <button
+    type="button"
+    class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
+      controls.allChannels ? 'border-primary/50 bg-primary/10' : 'border-border/70 bg-background/50 hover:bg-accent'
+    }`}
+    onclick={() => onControlChange({ type: 'selectAll' })}>
+    <div class="flex items-center gap-2.5">
+      <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <Layers class="size-4" />
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium">All channels</p>
+        <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span class="min-w-0 truncate">
+            {formatCompactPoints(totalBalance)}
+            pts
+            {#if totalEarned > 0}
+              <span class="text-emerald-700 dark:text-emerald-400">+{formatCompactPoints(totalEarned)}</span>
+            {/if}
+          </span>
+          <span class="shrink-0">{streamers.length} channels</span>
+        </div>
+      </div>
+    </div>
+  </button>
+
+  <ScrollArea class="h-75">
     <div class="space-y-1">
       {#each streamers as streamer (streamer.login)}
         {@const streamerState = runtimeStateByLogin.get(streamer.login)}
@@ -116,7 +147,7 @@
         <button
           type="button"
           class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
-            selectedStreamerLogin === streamer.login
+            !controls.allChannels && selectedStreamerLogin === streamer.login
               ? 'border-primary/50 bg-primary/10'
               : 'border-border/70 bg-background/50 hover:bg-accent'
           }`}
@@ -144,7 +175,22 @@
             </Tooltip.Root>
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
-                <p class="min-w-0 truncate text-sm font-medium">{formatStreamerName(streamer)}</p>
+                <p class="min-w-0 flex-1 truncate text-sm font-medium">{formatStreamerName(streamer)}</p>
+                {#if streamerState?.multiplier}
+                  <Tooltip.Root>
+                    <Tooltip.Trigger aria-label={multiplierTooltip}>
+                      {#snippet child({ props })}
+                        {@const { type: _type, ...triggerProps } = props}
+                        <Badge {...triggerProps} variant="outline" class="shrink-0 px-1.5 tabular-nums">
+                          ×{streamerState.multiplier}
+                        </Badge>
+                      {/snippet}
+                    </Tooltip.Trigger>
+                    <Tooltip.Content side="top" sideOffset={8}>
+                      {multiplierTooltip}
+                    </Tooltip.Content>
+                  </Tooltip.Root>
+                {/if}
                 {#if streamerState?.channelPointsDisabled}
                   <div class="shrink-0">
                     <Tooltip.Root>

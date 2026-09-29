@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
 import { getStreamers } from '$lib/server/config';
 import { getDatabase } from './client';
 import { sortStreamerAnalyticsItems } from './dashboard-sort';
-import { balanceSamples, channelPointEvents, minerRuns, streamers } from './schema';
+import { balanceSamples, channelPointEvents, streamers } from './schema';
+import { getStreamerPeriods, type TimeRange } from './sessions';
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';
 export type SortDir = 'asc' | 'desc';
@@ -22,13 +23,13 @@ export interface ChannelPointSample {
 }
 
 export interface ChannelPointsAnalyticsResult {
-  summary: {
-    trackedChannels: number;
-    pointsEarnedThisSession: number;
-  };
   streamers: StreamerAnalyticsItem[];
   selectedStreamerLogin: string | null;
   timeline: ChannelPointSample[];
+  periods: {
+    live: TimeRange[];
+    watched: TimeRange[];
+  };
 }
 
 interface ChannelPointsAnalyticsInput {
@@ -50,28 +51,6 @@ const dedupeConsecutiveBalances = (samples: ChannelPointSample[]) =>
     return acc;
   }, []);
 
-const getPointsEarnedThisSession = () => {
-  const db = getDatabase();
-  const activeRun = db
-    .select({ id: minerRuns.id })
-    .from(minerRuns)
-    .where(isNull(minerRuns.stoppedAtMs))
-    .orderBy(desc(minerRuns.startedAtMs))
-    .get();
-
-  if (!activeRun) return 0;
-
-  const row = db
-    .select({
-      total: sql<number>`coalesce(sum(${channelPointEvents.pointsDelta}), 0)`
-    })
-    .from(channelPointEvents)
-    .where(and(eq(channelPointEvents.minerRunId, activeRun.id), eq(channelPointEvents.eventType, 'points_earned')))
-    .get();
-
-  return Number(row?.total ?? 0);
-};
-
 const getLatestBalanceByStreamerId = (streamerId: number) => {
   const db = getDatabase();
   const row = db
@@ -84,8 +63,16 @@ const getLatestBalanceByStreamerId = (streamerId: number) => {
   return Number(row?.balance ?? 0);
 };
 
-const getTimeline = (streamerId: number, fromMs: number, toMs: number) => {
+// Balances are a step function, so the range is anchored with the balance carried in from before
+// it and extended with the latest balance up to now.
+const getTimeline = (streamerId: number, fromMs: number, toMs: number, nowMs: number) => {
   const db = getDatabase();
+  const previous = db
+    .select({ balance: balanceSamples.balance })
+    .from(balanceSamples)
+    .where(and(eq(balanceSamples.streamerId, streamerId), lt(balanceSamples.sampledAtMs, fromMs)))
+    .orderBy(desc(balanceSamples.sampledAtMs))
+    .get();
   const samples = db
     .select({
       timestampMs: balanceSamples.sampledAtMs,
@@ -106,7 +93,14 @@ const getTimeline = (streamerId: number, fromMs: number, toMs: number) => {
       balance: Number(item.balance)
     }));
 
-  return dedupeConsecutiveBalances(samples);
+  const timeline = dedupeConsecutiveBalances(
+    previous ? [{ timestampMs: fromMs, balance: Number(previous.balance) }, ...samples] : samples
+  );
+  const last = timeline.at(-1);
+  const endMs = Math.min(toMs, nowMs);
+  if (last && last.timestampMs < endMs) timeline.push({ timestampMs: endMs, balance: last.balance });
+
+  return timeline;
 };
 
 export const getChannelPointsAnalytics = ({
@@ -124,17 +118,12 @@ export const getChannelPointsAnalytics = ({
   const configuredStreamerNames = getStreamers();
   const priorityIndexByLogin = new Map(configuredStreamerNames.map((login, index) => [login, index]));
 
-  const summary = {
-    trackedChannels: configuredStreamerNames.length,
-    pointsEarnedThisSession: getPointsEarnedThisSession()
-  };
-
   if (configuredStreamerNames.length === 0) {
     return {
-      summary,
       streamers: [],
       selectedStreamerLogin: null,
-      timeline: []
+      timeline: [],
+      periods: { live: [], watched: [] }
     };
   }
 
@@ -213,12 +202,24 @@ export const getChannelPointsAnalytics = ({
     ? (sortedItems.find((item) => item.login === selectedStreamerLogin) ?? sortedItems[0] ?? null)
     : (sortedItems[0] ?? null);
 
-  const timeline = selected && selected.streamerId !== null ? getTimeline(selected.streamerId, fromMs, toMs) : [];
+  const selectedStreamerId = selected?.streamerId ?? null;
+  const timeline = selectedStreamerId !== null ? getTimeline(selectedStreamerId, fromMs, toMs, requestTimestampMs) : [];
+  const periods =
+    selected && selectedStreamerId !== null
+      ? getStreamerPeriods(
+          selectedStreamerId,
+          fromMs,
+          toMs,
+          requestTimestampMs,
+          onlineStreamers.has(selected.login),
+          watchedStreamers.has(selected.login)
+        )
+      : { live: [], watched: [] };
 
   return {
-    summary,
     streamers: sortedItems,
     selectedStreamerLogin: selected?.login ?? null,
-    timeline
+    timeline,
+    periods
   };
 };

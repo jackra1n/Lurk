@@ -74,9 +74,9 @@ export interface ChannelPointSample {
   balance: number;
 }
 
-export interface ChannelPointsAnalyticsSummary {
-  trackedChannels: number;
-  pointsEarnedThisSession: number;
+export interface TimeRange {
+  fromMs: number;
+  toMs: number;
 }
 
 export interface ChannelPointsAnalyticsResponse {
@@ -89,10 +89,13 @@ export interface ChannelPointsAnalyticsResponse {
     by: ChannelPointsSortBy;
     dir: SortDir;
   };
-  summary: ChannelPointsAnalyticsSummary;
   streamers: StreamerAnalyticsItem[];
   selectedStreamerLogin: string | null;
   timeline: ChannelPointSample[];
+  periods: {
+    live: TimeRange[];
+    watched: TimeRange[];
+  };
 }
 
 export type ActivityFeedItem =

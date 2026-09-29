@@ -1,17 +1,19 @@
 <script lang="ts">
   import { scaleUtc } from 'd3-scale';
-  import { curveLinear } from 'd3-shape';
+  import { curveStepAfter } from 'd3-shape';
   import { Area, AreaChart, LinearGradient } from 'layerchart';
   import type { ChartConfig } from '$lib/components/ui/chart';
   import { ChartContainer, ChartTooltip } from '$lib/components/ui/chart';
-  import type { ChannelPointSample } from '../shared/types';
+  import type { ChannelPointSample, TimeRange } from '../shared/types';
 
   let {
     timeline,
+    periods,
     rangeFromMs,
     rangeToMs
   }: {
     timeline: ChannelPointSample[];
+    periods: { live: TimeRange[]; watched: TimeRange[] };
     rangeFromMs: number;
     rangeToMs: number;
   } = $props();
@@ -48,6 +50,29 @@
 
     return syntheticTimestampMs < only.timestampMs ? [syntheticSample, only] : [only, syntheticSample];
   });
+
+  const toAnnotations = (ranges: TimeRange[], className: string) => {
+    const first = chartTimeline[0]?.timestampMs ?? 0;
+    const last = chartTimeline.at(-1)?.timestampMs ?? 0;
+    return ranges.flatMap((range) => {
+      const fromMs = Math.max(range.fromMs, first);
+      const toMs = Math.min(range.toMs, last);
+      if (toMs <= fromMs) return [];
+      return [
+        {
+          type: 'range' as const,
+          layer: 'below' as const,
+          x: [new Date(fromMs), new Date(toMs)],
+          class: className
+        }
+      ];
+    });
+  };
+
+  const annotations = $derived([
+    ...toAnnotations(periods.live, 'fill-muted-foreground/15'),
+    ...toAnnotations(periods.watched, 'fill-primary/20')
+  ]);
 
   const chartYDomain = $derived.by<[number, number]>(() => {
     const balances = chartTimeline.map((item) => item.balance);
@@ -126,6 +151,7 @@
         yDomain={chartYDomain}
         yBaseline={chartYDomain[0]}
         padding={chartPadding}
+        {annotations}
         series={[
 					{
 						key: 'balance',
@@ -162,7 +188,7 @@
               {#snippet children({ gradient })}
                 <Area
                   seriesKey={s.key}
-                  curve={curveLinear}
+                  curve={curveStepAfter}
                   fill-opacity={0.4}
                   line={{ class: 'stroke-1', stroke: s.color }}
                   motion="tween"
@@ -173,5 +199,17 @@
         {/snippet}
       </AreaChart>
     </ChartContainer>
+    {#if annotations.length > 0}
+      <div class="flex items-center justify-end gap-3 text-xs text-muted-foreground">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="size-2.5 rounded-[2px] bg-primary/20 ring-1 ring-primary/60"></span>
+          Watched
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="size-2.5 rounded-[2px] bg-muted-foreground/15 ring-1 ring-muted-foreground/50"></span>
+          Live
+        </span>
+      </div>
+    {/if}
   {/if}
 </div>

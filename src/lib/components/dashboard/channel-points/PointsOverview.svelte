@@ -127,7 +127,11 @@
           {streamerRuntimeStates}
           {minerRunning}
           {onControlChange} />
-        <PointsChart timeline={analytics.timeline} rangeFromMs={controls.rangeFromMs} rangeToMs={controls.rangeToMs} />
+        <PointsChart
+          timeline={analytics.timeline}
+          periods={analytics.periods}
+          rangeFromMs={controls.rangeFromMs}
+          rangeToMs={controls.rangeToMs} />
       </div>
     {/if}
   </CardContent>

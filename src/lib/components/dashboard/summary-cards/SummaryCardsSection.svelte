@@ -21,5 +21,7 @@
     minerRunning={minerStatus.running} />
   <EarningsCard
     earnings={summary?.earnings.last24h ?? emptyEarnings}
-    dailyAverage={summary?.earnings.dailyAverage ?? null} />
+    dailyAverage={summary?.earnings.dailyAverage ?? null}
+    allTime={summary?.earnings.allTime ?? 0}
+    sinceMs={summary?.earnings.sinceMs ?? null} />
 </section>

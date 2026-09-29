@@ -7,10 +7,14 @@
 
   let {
     earnings,
-    dailyAverage
+    dailyAverage,
+    allTime,
+    sinceMs
   }: {
     earnings: EarningsBreakdown;
     dailyAverage: number | null;
+    allTime: number;
+    sinceMs: number | null;
   } = $props();
 
   const sources = [
@@ -47,7 +51,7 @@
       <CardDescription class="text-sm">Not enough history to compare yet.</CardDescription>
     {/if}
   </CardHeader>
-  {#if visibleSources.length > 0}
+  {#if visibleSources.length > 0 || allTime > 0}
     <CardContent class="space-y-2 pt-0">
       <div class="flex h-2 gap-0.5 overflow-hidden rounded-full">
         {#each visibleSources as source (source.key)}
@@ -66,6 +70,15 @@
           </span>
         {/each}
       </div>
+      {#if allTime > 0}
+        <p class="border-t border-border/60 pt-2 text-xs text-muted-foreground">
+          <span class="text-foreground">{formatCompactPoints(allTime)}</span>
+          earned in total
+          {#if sinceMs !== null}
+            since {new Date(sinceMs).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+          {/if}
+        </p>
+      {/if}
     </CardContent>
   {/if}
 </Card>

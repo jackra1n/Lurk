@@ -11,15 +11,14 @@ RUN cd /temp/prod && bun install --frozen-lockfile --production --omit optional 
 FROM base AS build
 COPY --from=install /temp/dev/node_modules ./node_modules
 COPY . .
+ARG LURK_COMMIT
 RUN bun run build
 
 FROM base AS runtime
-ARG LURK_VERSION=dev
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV LURK_DATA_DIR=/data
-ENV LURK_VERSION=${LURK_VERSION}
 
 COPY --from=install /temp/prod/node_modules ./node_modules
 COPY --from=build /app/build ./build

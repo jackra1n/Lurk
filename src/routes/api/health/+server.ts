@@ -1,3 +1,4 @@
+import { version } from '$app/environment';
 import { json } from '@sveltejs/kit';
 
 const startedAt = Date.now();
@@ -7,5 +8,5 @@ export const GET = () =>
     status: 'ok',
     startedAt: new Date(startedAt).toISOString(),
     uptimeMs: Math.floor(process.uptime() * 1000),
-    version: process.env.LURK_VERSION ?? null
+    version
   });

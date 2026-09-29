@@ -119,6 +119,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            LURK_VERSION=${{ github.event_name == 'release' && github.event.release.tag_name || format('sha-{0}', github.sha) }}
+            LURK_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

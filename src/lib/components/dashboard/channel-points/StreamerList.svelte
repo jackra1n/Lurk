@@ -181,7 +181,7 @@
                   {#if status === 'watching'}
                     Watching
                   {:else if status === 'waiting'}
-                    Waiting for slot
+                    Waiting
                   {:else}
                     {timestampMs ? formatRelativeTime(timestampMs) : 'never'}
                   {/if}

@@ -28,6 +28,8 @@ export const GET: RequestHandler = async ({ url }) => {
   const sortBy = asSortBy(url.searchParams.get('sortBy'));
   const sortDir = asSortDir(url.searchParams.get('sortDir'));
   const selectedStreamerLogin = url.searchParams.get('selectedStreamer');
+  const allChannels = url.searchParams.get('scope') === 'all';
+  const utcOffsetMinutes = Math.max(-14 * 60, Math.min(14 * 60, asNumber(url.searchParams.get('utcOffset')) ?? 0));
 
   const toMs = toMsInput ?? now;
   const fromMs = fromMsInput ?? toMs - defaultRangeMs;
@@ -54,7 +56,9 @@ export const GET: RequestHandler = async ({ url }) => {
     watchedStreamers,
     runtimeBalanceByLogin,
     requestTimestampMs: now,
-    selectedStreamerLogin
+    selectedStreamerLogin,
+    allChannels,
+    utcOffsetMinutes
   });
 
   return json({

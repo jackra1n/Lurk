@@ -3,6 +3,7 @@ import { getStreamers } from '$lib/server/config';
 import { getDatabase } from './client';
 import { sortStreamerAnalyticsItems } from './dashboard-sort';
 import { balanceSamples, channelPointEvents, streamers } from './schema';
+import { type EarningsBuckets, getEarningsBuckets } from './earnings';
 import { getStreamerPeriods, type TimeRange } from './sessions';
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';
@@ -32,6 +33,7 @@ export interface ChannelPointsAnalyticsResult {
     live: TimeRange[];
     watched: TimeRange[];
   };
+  earnings: EarningsBuckets | null;
 }
 
 interface ChannelPointsAnalyticsInput {
@@ -44,6 +46,8 @@ interface ChannelPointsAnalyticsInput {
   runtimeBalanceByLogin?: ReadonlyMap<string, number>;
   requestTimestampMs?: number;
   selectedStreamerLogin?: string | null;
+  allChannels?: boolean;
+  utcOffsetMinutes?: number;
 }
 
 const dedupeConsecutiveBalances = (samples: ChannelPointSample[]) =>
@@ -114,7 +118,9 @@ export const getChannelPointsAnalytics = ({
   watchedStreamers = new Set<string>(),
   runtimeBalanceByLogin = new Map<string, number>(),
   requestTimestampMs = Date.now(),
-  selectedStreamerLogin
+  selectedStreamerLogin,
+  allChannels = false,
+  utcOffsetMinutes = 0
 }: ChannelPointsAnalyticsInput): ChannelPointsAnalyticsResult => {
   const db = getDatabase();
   const configuredStreamerNames = getStreamers();
@@ -125,7 +131,8 @@ export const getChannelPointsAnalytics = ({
       streamers: [],
       selectedStreamerLogin: null,
       timeline: [],
-      periods: { live: [], watched: [] }
+      periods: { live: [], watched: [] },
+      earnings: null
     };
   }
 
@@ -200,6 +207,16 @@ export const getChannelPointsAnalytics = ({
     watchedStreamers
   });
 
+  if (allChannels) {
+    return {
+      streamers: sortedItems,
+      selectedStreamerLogin: null,
+      timeline: [],
+      periods: { live: [], watched: [] },
+      earnings: getEarningsBuckets(streamerIds, fromMs, toMs, utcOffsetMinutes)
+    };
+  }
+
   const selected = selectedStreamerLogin
     ? (sortedItems.find((item) => item.login === selectedStreamerLogin) ?? sortedItems[0] ?? null)
     : (sortedItems[0] ?? null);
@@ -222,6 +239,7 @@ export const getChannelPointsAnalytics = ({
     streamers: sortedItems,
     selectedStreamerLogin: selected?.login ?? null,
     timeline,
-    periods
+    periods,
+    earnings: null
   };
 };

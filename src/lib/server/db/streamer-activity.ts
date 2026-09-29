@@ -148,7 +148,7 @@ const getMissedTime = (
         login: streamer.login,
         liveMs,
         watchedMs,
-        missedPoints: rate === null ? null : Math.round((liveMs - watchedMs) * rate)
+        missedPoints: rate === null ? null : Math.round(((liveMs - watchedMs) * rate) / 10) * 10
       } satisfies MissedTimeItem;
     })
     .filter((item) => item.liveMs > 0)

@@ -7,6 +7,10 @@
   let { items = [], days = 7 }: { items?: MissedTimeItem[]; days?: number } = $props();
 
   const maxLiveMs = $derived(Math.max(1, ...items.map((item) => item.liveMs)));
+
+  // Watching starts shortly after a stream goes live, so a few minutes per stream are always missed.
+  const isFullyWatched = (item: MissedTimeItem) =>
+    item.liveMs - item.watchedMs < Math.max(5 * 60_000, item.liveMs * 0.01);
 </script>
 
 <Card class="bg-card/80">
@@ -35,11 +39,12 @@
         <div class="space-y-3 pr-3">
           {#each items as item (item.login)}
             {@const missedMs = item.liveMs - item.watchedMs}
+            {@const fullyWatched = isFullyWatched(item)}
             <div class="space-y-1.5">
               <div class="flex items-baseline justify-between gap-3">
                 <p class="min-w-0 truncate text-sm font-medium">{item.login}</p>
                 <p class="shrink-0 text-sm tabular-nums">
-                  {missedMs > 0 ? `${formatDuration(missedMs)} missed` : 'Fully watched'}
+                  {fullyWatched ? 'Fully watched' : `${formatDuration(missedMs)} missed`}
                 </p>
               </div>
               <div class="h-2 rounded-full bg-muted/60">
@@ -47,14 +52,18 @@
                   {#if item.watchedMs > 0}
                     <span class="h-full rounded-full bg-primary" style={`flex-grow: ${item.watchedMs}`}></span>
                   {/if}
-                  {#if missedMs > 0}
+                  {#if !fullyWatched}
                     <span class="h-full rounded-full bg-primary/25" style={`flex-grow: ${missedMs}`}></span>
                   {/if}
                 </div>
               </div>
               <p class="text-xs text-muted-foreground">
-                {Math.round((item.watchedMs / item.liveMs) * 100)}% of {formatDuration(item.liveMs)} live watched
-                {#if item.missedPoints !== null && item.missedPoints > 0}
+                {#if fullyWatched}
+                  Watched all {formatDuration(item.liveMs)} live
+                {:else}
+                  {Math.floor((item.watchedMs / item.liveMs) * 100)}% of {formatDuration(item.liveMs)} live watched
+                {/if}
+                {#if !fullyWatched && item.missedPoints !== null && item.missedPoints > 0}
                   · ~{formatCompactPoints(item.missedPoints)}
                   pts missed
                 {/if}

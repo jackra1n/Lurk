@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'bun:test';
 import { checkStreamerOnline, selectDueStreamers, syncStreamers } from './streamers';
 import { createDefaultStreamData, createDefaultStreamMetadataState, type StreamerState } from './types';
 import { handlePubSubMessage, type EventHandlerDeps } from './events';
-import { DEFAULT_CHANNEL_POINTS_STATUS } from './channel-points-status';
+import { CHANNEL_POINTS_STATUS, DEFAULT_CHANNEL_POINTS_STATUS } from './channel-points-status';
 import { encodeMinuteWatchedPayload, twitchClient, TwitchClient, type StreamInfoStatus } from '../twitch-client';
 import { getStreamers } from '../config';
 import { MinerService } from './service';
@@ -712,6 +712,40 @@ describe('stream metadata scheduling', () => {
       statusSpy.mockRestore();
       recordSpy.mockRestore();
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('PubSub message deduplication', () => {
+  const pointsEarned = (reasonCode: string, totalPoints: number, balance: number) => ({
+    type: 'points-earned',
+    data: {
+      timestamp: `2026-01-01T00:00:00.${balance}Z`,
+      channel_id: 'alpha-id',
+      point_gain: { total_points: totalPoints, reason_code: reasonCode },
+      balance: { balance, channel_id: 'alpha-id' }
+    }
+  });
+
+  test('records distinct points-earned messages arriving back to back', () => {
+    const state = { ...streamer('alpha', 0), channelPointsStatus: CHANNEL_POINTS_STATUS.Enabled };
+    const deps: EventHandlerDeps = {
+      streamerStates: new Map([[state.name, state]]),
+      dedup: { lastMessageTimestamp: 0, lastMessageIdentifier: '' },
+      claimBonus: async () => {}
+    };
+    const recordSpy = vi.spyOn(eventStore, 'recordEvent').mockImplementation(() => {});
+
+    try {
+      const topic = 'community-points-user-v1.user';
+      handlePubSubMessage(deps, topic, 'points-earned', pointsEarned('WATCH', 10, 1010));
+      handlePubSubMessage(deps, topic, 'points-earned', pointsEarned('WATCH_STREAK', 450, 1460));
+      handlePubSubMessage(deps, topic, 'points-earned', pointsEarned('WATCH_STREAK', 450, 1460));
+      expect(recordSpy).toHaveBeenCalledTimes(2);
+      expect(state.channelPoints).toBe(1460);
+      expect(state.history.WATCH_STREAK).toEqual({ counter: 1, amount: 450 });
+    } finally {
+      recordSpy.mockRestore();
     }
   });
 });

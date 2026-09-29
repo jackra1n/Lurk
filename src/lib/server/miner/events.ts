@@ -38,7 +38,7 @@ export interface EventHandlerDeps {
 
 export function handlePubSubMessage(deps: EventHandlerDeps, topic: string, messageType: string, data: unknown): void {
   const now = Date.now();
-  const identifier = `${messageType}.${topic}`;
+  const identifier = `${topic}.${JSON.stringify(data)}`;
   if (identifier === deps.dedup.lastMessageIdentifier && now - deps.dedup.lastMessageTimestamp < 500) {
     logger.debug({ topic, messageType }, 'Skipping duplicate PubSub message');
     return;

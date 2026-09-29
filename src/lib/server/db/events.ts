@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, max } from 'drizzle-orm';
 import { getDatabase, initializeDatabase } from './client';
 import { balanceSamples, channelPointEvents, minerRuns, streamSessions, streamers } from './schema';
 import { getLogger } from '$lib/server/logger';
@@ -167,11 +167,33 @@ const findOpenStreamSessionId = (streamerId: number) => {
   return row.id;
 };
 
+const closeSupersededStreamSession = (streamerId: number, streamSessionId: number, broadcastId?: string | null) => {
+  if (!broadcastId) return false;
+
+  const db = getDatabase();
+  const session = db
+    .select({ broadcastId: streamSessions.broadcastId, startedAtMs: streamSessions.startedAtMs })
+    .from(streamSessions)
+    .where(eq(streamSessions.id, streamSessionId))
+    .get();
+
+  if (!session?.broadcastId || session.broadcastId === broadcastId) return false;
+
+  const lastEvent = db
+    .select({ occurredAtMs: max(channelPointEvents.occurredAtMs) })
+    .from(channelPointEvents)
+    .where(eq(channelPointEvents.streamSessionId, streamSessionId))
+    .get();
+
+  closeStreamSession(streamerId, streamSessionId, lastEvent?.occurredAtMs ?? session.startedAtMs);
+  return true;
+};
+
 const openStreamSession = (streamerId: number, input: EventInput) => {
   const db = getDatabase();
   const existingSessionId = findOpenStreamSessionId(streamerId);
 
-  if (existingSessionId) {
+  if (existingSessionId && !closeSupersededStreamSession(streamerId, existingSessionId, input.broadcastId)) {
     const nextValues = {
       ...(input.broadcastId !== undefined && input.broadcastId !== null ? { broadcastId: input.broadcastId } : {}),
       ...(input.title !== undefined && input.title !== null ? { title: input.title } : {}),

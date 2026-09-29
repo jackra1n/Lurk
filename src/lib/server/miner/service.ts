@@ -512,7 +512,8 @@ export class MinerService {
         login,
         isOnline: false,
         isWatched: false,
-        multiplier: null
+        multiplier: null,
+        notFound: false
       }));
     }
 
@@ -525,7 +526,8 @@ export class MinerService {
         login,
         isOnline: Boolean(state?.isLive),
         isWatched: watched.has(login),
-        multiplier: bonus > 0 ? Math.round((1 + bonus) * 100) / 100 : null
+        multiplier: bonus > 0 ? Math.round((1 + bonus) * 100) / 100 : null,
+        notFound: twitchClient.isMissingUser(login)
       };
     });
   }

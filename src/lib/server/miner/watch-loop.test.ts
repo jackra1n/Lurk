@@ -198,13 +198,13 @@ describe('watched-state readiness', () => {
       internals.streamerStates = new Map([[state.name, state]]);
       internals.watchedStreamerNames = new Set();
       expect(service.getStreamerRuntimeStates()).toEqual([
-        { login: state.name, isOnline: true, isWatched: false, multiplier: null }
+        { login: state.name, isOnline: true, isWatched: false, multiplier: null, notFound: false }
       ]);
 
       internals.watchedStreamerNames = new Set([state.name]);
       state.activeMultipliers = [{ factor: 0.2 }];
       expect(service.getStreamerRuntimeStates()).toEqual([
-        { login: state.name, isOnline: true, isWatched: true, multiplier: 1.2 }
+        { login: state.name, isOnline: true, isWatched: true, multiplier: 1.2, notFound: false }
       ]);
     } finally {
       configuredStreamers.splice(0, configuredStreamers.length, ...originalStreamers);

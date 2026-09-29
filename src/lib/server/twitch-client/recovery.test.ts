@@ -268,6 +268,20 @@ describe('operation-scoped GQL recovery', () => {
     }
   });
 
+  test('flags only logins Twitch reports as missing until they resolve again', async () => {
+    respond = () => Response.json({ data: { user: null } });
+    expect(await client.getUserId('Renamed')).toBeNull();
+    expect(client.isMissingUser('renamed')).toBe(true);
+
+    respond = () => Response.json({ data: { user: { id: '42' } } });
+    expect(await client.getUserId('renamed')).toBe('42');
+    expect(client.isMissingUser('renamed')).toBe(false);
+
+    respond = () => gqlError('service unavailable');
+    expect(await client.getUserId('unreachable')).toBeNull();
+    expect(client.isMissingUser('unreachable')).toBe(false);
+  });
+
   test('returns the streamer profile with stream status', async () => {
     const user = { displayName: 'Alpha', profileImageURL: 'https://example.com/alpha.png', stream: null };
     respond = () => Response.json({ data: { user } });

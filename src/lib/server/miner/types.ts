@@ -67,6 +67,7 @@ export interface StreamerRuntimeState {
   isOnline: boolean;
   isWatched: boolean;
   multiplier: number | null;
+  notFound: boolean;
 }
 
 export interface WatchedStream {

@@ -570,8 +570,13 @@ export class TwitchClient {
       return null;
     }
 
+    this.missingUsers.delete(login.toLowerCase());
     logger.debug({ login, userId }, 'Got user ID');
     return userId;
+  }
+
+  isMissingUser(login: string): boolean {
+    return this.missingUsers.has(login.toLowerCase());
   }
 
   async getUser(login: string): Promise<TwitchUser | null> {

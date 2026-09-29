@@ -1,5 +1,78 @@
 # Changelog
 
+## [1.3.0](https://github.com/jackra1n/Lurk/compare/1.2.0...1.3.0) (2026-09-29)
+
+
+### Features
+
+* add all channels earnings buckets to channel points analytics ([f4441bc](https://github.com/jackra1n/Lurk/commit/f4441bc11a7d2f075a910401d523a964ec283551))
+* add all channels earnings view and multiplier badges ([7314f5e](https://github.com/jackra1n/Lurk/commit/7314f5e73850f92d5ad191c8c3c1fd9165895873))
+* add all-time earnings to dashboard summary ([72649a7](https://github.com/jackra1n/Lurk/commit/72649a7aa4efb12dfdc8c93c9dc5ee5e231c9f75))
+* add dashboard summary endpoint ([e6f1d57](https://github.com/jackra1n/Lurk/commit/e6f1d5716f4451a89b1eda668a8ab26c1384a3a9))
+* add logout to auth dialog and stop miner on logout ([ae51c61](https://github.com/jackra1n/Lurk/commit/ae51c6189cd5918d2314ebcdf1c948f123922252))
+* add watch session and live range helpers ([fc17913](https://github.com/jackra1n/Lurk/commit/fc179138cf98149e22c29f5814884fbb3e772110))
+* expose active points multiplier in runtime states ([b73553a](https://github.com/jackra1n/Lurk/commit/b73553a129008919a395840bc7be943d890d2ec9))
+* highlight streamers missing on Twitch in streamer list ([ce2b605](https://github.com/jackra1n/Lurk/commit/ce2b6054b11db6d2904638744263b61c0d8626f8))
+* move miner controls to header and show watching now and 24h earnings ([a7e2488](https://github.com/jackra1n/Lurk/commit/a7e2488cd99384d5ed3135324732ffc5e1480cbd))
+* replace recent events and most active cards with activity feed and missed time ([65c73a0](https://github.com/jackra1n/Lurk/commit/65c73a02d03fb4cbb251048c9afa5c974c705d4e))
+* report streamers missing on Twitch in runtime states ([2b2b5bd](https://github.com/jackra1n/Lurk/commit/2b2b5bd8b259f28c2b503dc39ed85f7b26727b46))
+* return streamer profile and range earnings in channel points analytics ([eadb03c](https://github.com/jackra1n/Lurk/commit/eadb03c42fe4adf81cec3b5b167923defb5ec0eb))
+* shade live and watched periods behind balance chart ([3ed8665](https://github.com/jackra1n/Lurk/commit/3ed8665d57ffa658201144a998f42e44da31a9c6))
+* show all-time earnings on earnings card ([a4192fe](https://github.com/jackra1n/Lurk/commit/a4192fedda29b530bf778007e8b26d03371a761d))
+* show avatars, slot status and range earnings in streamer list ([44c0c33](https://github.com/jackra1n/Lurk/commit/44c0c3396831476e1e7f09385ceda4e7cccd6851))
+* show commit hash in parentheses after version ([0f36bbb](https://github.com/jackra1n/Lurk/commit/0f36bbb484e8a259e78ca80b0109d95243e0f5ce))
+* show version and commit in footer ([341900d](https://github.com/jackra1n/Lurk/commit/341900da46b21963707ece454930165369150d77))
+* store streamer display name and avatar from stream metadata ([a29b8a0](https://github.com/jackra1n/Lurk/commit/a29b8a06543f7a9d7ea7fb53d7a5d8a1af43086e))
+
+
+### Bug Fixes
+
+* close stale stream session when a new broadcast starts ([017a03f](https://github.com/jackra1n/Lurk/commit/017a03f6c40d060310ab55cce5150ec61cdbd308))
+* coordinate Twitch API retries and recovery probes, honor Retry-After, and time out stalled requests ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* deduplicate PubSub messages by content instead of topic ([c6ef8ab](https://github.com/jackra1n/Lurk/commit/c6ef8abfbed5c738481425836a9348184dbcdd23))
+* keep watch telemetry running during stream-metadata outages and automatically recover stream discovery ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* pace metadata polling and recover missed stream starts ([9a69ac3](https://github.com/jackra1n/Lurk/commit/9a69ac3c221025dcf6c44259c3344215b3455fb1))
+* prevent overlapping watch-loop runs and discard obsolete scheduling and metadata results after lifecycle changes ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* read stream metadata from Twitch broadcast settings and correctly distinguish offline channels from failed lookups ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* recover missed stream-start notifications from viewer-count events while preserving retry backoff ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* replay PubSub subscriptions immediately after reconnect ([76879b8](https://github.com/jackra1n/Lurk/commit/76879b88f9869e1e2d26c581c5204518c910646d))
+* report the active watched set when watch telemetry is unavailable ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* resolve HLS URLs past trailing tags and reliably discover Twitch telemetry settings scripts ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* retain and retry desired PubSub subscriptions ([4b2ddd5](https://github.com/jackra1n/Lurk/commit/4b2ddd5afc3259e92cb25b434a36dfb2533d54d0))
+* treat negligible missed time as fully watched ([67d3c7c](https://github.com/jackra1n/Lurk/commit/67d3c7c09870b26551d4e7eef36e62227f0dedfe))
+
+
+### Performance
+
+* reduce offline status polling to every 15 minutes and pace metadata checks to avoid flooding the shared API queue ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* send minute-watched events roughly once per minute per streamer and reuse broadcast playlist URLs ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+* share the Twitch telemetry endpoint cache across channels and back off failed refreshes ([1fe58dd](https://github.com/jackra1n/Lurk/commit/1fe58dd249322998ffe778dfe87d3c78db58d7b2))
+
+
+### Refactoring
+
+* make PubSub subscription registration nonblocking ([3af3faf](https://github.com/jackra1n/Lurk/commit/3af3faf8849c41578e0aeed1cb4fc2c0df46be6a))
+* move PubSub subscription ownership into sockets ([15ba12c](https://github.com/jackra1n/Lurk/commit/15ba12c5ce7d084fbb2ae5680510a7bcf0a0927c))
+* unify metadata eligibility and remove obsolete stream state ([d8d8e74](https://github.com/jackra1n/Lurk/commit/d8d8e74ac579d2dadd51df0f7359d34050191241))
+
+
+### Documentation
+
+* regenerate preview screenshot ([eb7aa5c](https://github.com/jackra1n/Lurk/commit/eb7aa5c08d3f89c67db45ef80deb89a67e9920fe))
+* regenerate preview screenshot ([a2d1e2a](https://github.com/jackra1n/Lurk/commit/a2d1e2ab2febbbc54eed58fc1681f84ef9056aef))
+
+
+### Styles
+
+* add bottom padding to chart period legend ([e2b1a5c](https://github.com/jackra1n/Lurk/commit/e2b1a5c08702452ba12f956dc1100d454fad7b67))
+* format project with Biome ([b859c0e](https://github.com/jackra1n/Lurk/commit/b859c0ea9979cf4c5977ab2da7f5a9149d1ca8a5))
+* shorten waiting status in streamer list ([f708eb5](https://github.com/jackra1n/Lurk/commit/f708eb5060d1db822f1beacf5a4caabb31b94768))
+
+
+### CI/CD
+
+* use latest bun by default ([ed82689](https://github.com/jackra1n/Lurk/commit/ed8268961c0077b971a88bb5927280ad4eb0f14f))
+
 ## [1.2.0](https://github.com/jackra1n/Lurk/compare/1.1.0...1.2.0) (2026-02-26)
 
 

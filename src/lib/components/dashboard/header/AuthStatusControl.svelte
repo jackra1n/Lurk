@@ -4,6 +4,7 @@
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import Link from '@lucide/svelte/icons/link';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+  import LogOut from '@lucide/svelte/icons/log-out';
   import { Button } from '$lib/components/ui/button';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as Tooltip from '$lib/components/ui/tooltip';
@@ -115,6 +116,7 @@
 
   const startLogin = () => runAuthAction('startLogin');
   const cancelLogin = () => runAuthAction('cancelLogin');
+  const logout = () => runAuthAction('logout');
 </script>
 
 <Tooltip.Root>
@@ -194,6 +196,13 @@
           <p class="text-sm text-muted-foreground">Connected account</p>
           <p class="mt-1 text-sm font-medium">{authStatus.username ?? authStatus.userId ?? 'Twitch user'}</p>
         </div>
+        <Dialog.Footer>
+          <p class="text-sm text-muted-foreground sm:mr-auto sm:self-center">Logging out stops the miner.</p>
+          <Button type="button" variant="destructive" disabled={loadingAuthAction} onclick={logout}>
+            <LogOut class="size-4" />
+            {loadingAuthAction ? 'Logging out...' : 'Log Out'}
+          </Button>
+        </Dialog.Footer>
       {:else}
         <Dialog.Footer>
           <Button

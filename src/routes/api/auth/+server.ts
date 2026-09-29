@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { twitchAuth } from '$lib/server/auth';
+import { minerService } from '$lib/server/miner';
 import { getLogger } from '$lib/server/logger';
 
 const logger = getLogger('AuthAPI');
@@ -46,6 +47,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     case 'logout': {
+      minerService.stop();
       twitchAuth.logout();
       return json({ success: true, message: 'Logged out' });
     }

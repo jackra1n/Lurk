@@ -200,7 +200,7 @@
       </AreaChart>
     </ChartContainer>
     {#if annotations.length > 0}
-      <div class="flex items-center justify-end gap-3 text-xs text-muted-foreground">
+      <div class="flex items-center justify-end gap-3 pb-4 text-xs text-muted-foreground">
         <span class="inline-flex items-center gap-1.5">
           <span class="size-2.5 rounded-[2px] bg-primary/20 ring-1 ring-primary/60"></span>
           Watched

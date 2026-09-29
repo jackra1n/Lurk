@@ -28,6 +28,7 @@ export interface StreamerRuntimeState {
   isWatched: boolean;
   channelPointsDisabled: boolean;
   multiplier: number | null;
+  notFound: boolean;
 }
 
 export type ChannelPointsSortBy = 'name' | 'points' | 'lastActive' | 'lastWatched' | 'priority';

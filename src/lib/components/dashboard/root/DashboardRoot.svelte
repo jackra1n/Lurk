@@ -282,7 +282,8 @@
                 multiplier:
                   typeof (value as { multiplier?: unknown }).multiplier === 'number'
                     ? (value as { multiplier: number }).multiplier
-                    : null
+                    : null,
+                notFound: Boolean((value as { notFound?: unknown }).notFound)
               }
             ];
           })

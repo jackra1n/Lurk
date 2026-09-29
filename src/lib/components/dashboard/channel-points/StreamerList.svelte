@@ -2,6 +2,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
+  import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Layers from '@lucide/svelte/icons/layers';
   import { Badge } from '$lib/components/ui/badge';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
@@ -46,10 +47,11 @@
     new Map(streamerRuntimeStates.map((streamerState) => [streamerState.login, streamerState]))
   );
 
-  type StreamerStatus = 'unknown' | 'watching' | 'waiting' | 'live' | 'offline';
+  type StreamerStatus = 'unknown' | 'missing' | 'watching' | 'waiting' | 'live' | 'offline';
 
   const getStatus = (streamerState?: StreamerRuntimeState): StreamerStatus => {
     if (!minerRunning) return 'unknown';
+    if (streamerState?.notFound) return 'missing';
     if (streamerState?.isWatched) return 'watching';
     if (streamerState?.isOnline) return streamerState.channelPointsDisabled ? 'live' : 'waiting';
     return 'offline';
@@ -57,6 +59,7 @@
 
   const statusDotClass = {
     unknown: 'bg-muted-foreground/60',
+    missing: 'bg-destructive',
     watching: 'bg-primary',
     waiting: 'bg-amber-400',
     live: 'bg-emerald-500',
@@ -65,6 +68,7 @@
 
   const statusTooltip = {
     unknown: "Streamer status is not updated while the miner service isn't running.",
+    missing: 'Twitch account not found',
     watching: 'Live · watching now',
     waiting: 'Live · waiting for a free watch slot',
     live: 'Live · not watched because channel points are off',
@@ -74,6 +78,18 @@
   const totalBalance = $derived(streamers.reduce((total, streamer) => total + streamer.latestBalance, 0));
   const totalEarned = $derived(streamers.reduce((total, streamer) => total + streamer.pointsEarned, 0));
   const multiplierTooltip = 'Channel points multiplier, usually from a subscription.';
+
+  const rowClass = (selected: boolean, missing: boolean) => {
+    if (missing) {
+      return selected
+        ? 'border-destructive bg-destructive/15'
+        : 'border-destructive/50 bg-destructive/10 hover:bg-destructive/15';
+    }
+    return selected ? 'border-primary/50 bg-primary/10' : 'border-border/70 bg-background/50 hover:bg-accent';
+  };
+
+  const notFoundTooltip = (login: string) =>
+    `No Twitch account named "${login}" exists anymore. The streamer probably changed their name, so update it in your config.`;
 
   const channelPointsDisabledTooltip =
     'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
@@ -146,11 +162,10 @@
         {@const status = getStatus(streamerState)}
         <button
           type="button"
-          class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
-            !controls.allChannels && selectedStreamerLogin === streamer.login
-              ? 'border-primary/50 bg-primary/10'
-              : 'border-border/70 bg-background/50 hover:bg-accent'
-          }`}
+          class={`w-full rounded-md border px-3 py-2 text-left transition-colors ${rowClass(
+            !controls.allChannels && selectedStreamerLogin === streamer.login,
+            status === 'missing'
+          )}`}
           onclick={() => onControlChange({ type: 'selectStreamer', login: streamer.login })}>
           <div class="flex items-center gap-2.5">
             <Tooltip.Root>
@@ -176,6 +191,25 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
                 <p class="min-w-0 flex-1 truncate text-sm font-medium">{formatStreamerName(streamer)}</p>
+                {#if status === 'missing'}
+                  <Tooltip.Root>
+                    <Tooltip.Trigger aria-label={notFoundTooltip(streamer.login)}>
+                      {#snippet child({ props })}
+                        {@const { type: _type, ...triggerProps } = props}
+                        <Badge
+                          {...triggerProps}
+                          variant="outline"
+                          class="shrink-0 border-destructive/60 bg-destructive/15 text-destructive">
+                          <CircleAlert class="size-3" />
+                          Not found
+                        </Badge>
+                      {/snippet}
+                    </Tooltip.Trigger>
+                    <Tooltip.Content side="top" sideOffset={8} class="max-w-64">
+                      {notFoundTooltip(streamer.login)}
+                    </Tooltip.Content>
+                  </Tooltip.Root>
+                {/if}
                 {#if streamerState?.multiplier}
                   <Tooltip.Root>
                     <Tooltip.Trigger aria-label={multiplierTooltip}>

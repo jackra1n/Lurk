@@ -64,6 +64,11 @@ export interface StreamInfo {
   viewersCount: number;
 }
 
+export interface StreamerProfile {
+  displayName: string | null;
+  profileImageUrl: string | null;
+}
+
 export interface ChannelPointsContext {
   balance: number;
   availableClaimId: string | null;
@@ -115,8 +120,8 @@ interface GqlErrorSummary {
 }
 
 export type StreamInfoStatus =
-  | { kind: 'live'; info: StreamInfo }
-  | { kind: 'offline' }
+  | { kind: 'live'; info: StreamInfo; profile?: StreamerProfile }
+  | { kind: 'offline'; profile?: StreamerProfile }
   | {
       kind: 'unknown';
       reason: 'gql_error' | 'not_authenticated';
@@ -633,6 +638,8 @@ export class TwitchClient {
 
     interface StreamInfoResponse {
       user: {
+        displayName?: string | null;
+        profileImageURL?: string | null;
         broadcastSettings: {
           title: string;
           game: { displayName: string } | null;
@@ -659,7 +666,11 @@ export class TwitchClient {
 
     const user = response.data?.user;
     const stream = user?.stream;
-    if (user === null || stream === null) return { kind: 'offline' };
+    const profile =
+      user?.displayName || user?.profileImageURL
+        ? { displayName: user.displayName ?? null, profileImageUrl: user.profileImageURL ?? null }
+        : undefined;
+    if (user === null || stream === null) return { kind: 'offline', profile };
     if (
       !stream ||
       typeof stream.id !== 'string' ||
@@ -683,7 +694,8 @@ export class TwitchClient {
         title: user.broadcastSettings.title,
         game: user.broadcastSettings.game,
         viewersCount: stream.viewersCount
-      }
+      },
+      profile
     };
   }
 

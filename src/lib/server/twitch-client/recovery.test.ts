@@ -267,6 +267,15 @@ describe('operation-scoped GQL recovery', () => {
       expect(await client.getStreamInfoStatus('alpha')).toEqual({ kind: 'offline' });
     }
   });
+
+  test('returns the streamer profile with stream status', async () => {
+    const user = { displayName: 'Alpha', profileImageURL: 'https://example.com/alpha.png', stream: null };
+    respond = () => Response.json({ data: { user } });
+    expect(await client.getStreamInfoStatus('alpha')).toEqual({
+      kind: 'offline',
+      profile: { displayName: 'Alpha', profileImageUrl: 'https://example.com/alpha.png' }
+    });
+  });
 });
 
 describe('GQL error classification', () => {

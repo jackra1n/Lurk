@@ -3,7 +3,11 @@ import { twitchClient, type StreamInfo } from '$lib/server/twitch-client';
 import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
-import { getStreamerChannelPointsState, setStreamerChannelPointsState } from '$lib/server/db/streamers';
+import {
+  getStreamerChannelPointsState,
+  setStreamerChannelPointsState,
+  setStreamerProfile
+} from '$lib/server/db/streamers';
 import {
   type StreamerState,
   PubSubTopicType,
@@ -228,6 +232,12 @@ async function refreshStreamMetadata(state: StreamerState, generation: number): 
 
   state.metadata.status = 'fresh';
   state.metadata.lastSuccessAtMs = now;
+  const { profile } = streamStatus;
+  if (profile) {
+    withEventStore('streamer_profile', () =>
+      setStreamerProfile({ login: state.name, channelId: state.channelId }, profile)
+    );
+  }
   state.metadata.nextCheckAtMs =
     now + (streamStatus.kind === 'live' ? LIVE_METADATA_REFRESH_INTERVAL_MS : OFFLINE_METADATA_REFRESH_INTERVAL_MS);
 

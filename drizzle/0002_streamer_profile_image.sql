@@ -1,0 +1,1 @@
+ALTER TABLE `streamers` ADD `profile_image_url` text;

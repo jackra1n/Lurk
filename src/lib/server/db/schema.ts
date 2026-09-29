@@ -8,6 +8,7 @@ export const streamers = sqliteTable(
     login: text('login'),
     channelId: text('channel_id'),
     displayName: text('display_name'),
+    profileImageUrl: text('profile_image_url'),
     channelPointsStatus: text('channel_points_status').notNull().default('unknown'),
     channelPointsStatusCheckedAtMs: integer('channel_points_status_checked_at_ms').notNull().default(0),
     createdAtMs: integer('created_at_ms').notNull(),

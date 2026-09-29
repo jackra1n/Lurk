@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDatabase } from './client';
 import { streamers } from './schema';
+import type { StreamerProfile } from '$lib/server/twitch-client';
 import {
   DEFAULT_CHANNEL_POINTS_STATUS,
   DEFAULT_CHANNEL_POINTS_STATUS_CHECKED_AT_MS,
@@ -149,4 +150,24 @@ export const setStreamerChannelPointsState = (streamer: StreamerRef, nextState: 
     })
     .where(eq(streamers.id, streamerId))
     .run();
+};
+
+const persistedProfileByLogin = new Map<string, string>();
+
+export const setStreamerProfile = (streamer: StreamerRef, profile: StreamerProfile): void => {
+  const login = normalizeLogin(streamer.login);
+  const profileKey = `${profile.displayName}\n${profile.profileImageUrl}`;
+  if (!login || persistedProfileByLogin.get(login) === profileKey) return;
+
+  const streamerId = ensureStreamer({ login, channelId: streamer.channelId });
+  getDatabase()
+    .update(streamers)
+    .set({
+      displayName: profile.displayName,
+      profileImageUrl: profile.profileImageUrl,
+      updatedAtMs: Date.now()
+    })
+    .where(eq(streamers.id, streamerId))
+    .run();
+  persistedProfileByLogin.set(login, profileKey);
 };

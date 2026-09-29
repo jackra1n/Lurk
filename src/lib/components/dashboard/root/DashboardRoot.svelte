@@ -9,8 +9,8 @@
   import DashboardNotice from '../shared/DashboardNotice.svelte';
   import SummaryCardsSection from '../summary-cards/SummaryCardsSection.svelte';
   import type {
+    ActivityFeedItem,
     AuthStatusResponse,
-    ChannelPointsRecentEventItem,
     ChannelPointsAnalyticsResponse,
     ChannelPointsControlChange,
     ChannelPointsControls,
@@ -20,8 +20,8 @@
     LifecycleReason,
     MinerLifecycle,
     MinerStatusResponse,
+    MissedTimeItem,
     SortDir,
-    StreamerActivityItem,
     StreamerActivityResponse
   } from '../shared/types';
 
@@ -83,8 +83,8 @@
   let loadingMinerAction = $state(false);
   let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
   let summary = $state<DashboardSummaryResponse | null>(null);
-  let streamerActivity = $state<StreamerActivityItem[]>([]);
-  let recentEvents = $state<ChannelPointsRecentEventItem[]>([]);
+  let activityFeed = $state<ActivityFeedItem[]>([]);
+  let missedTime = $state<MissedTimeItem[]>([]);
   let analyticsLoading = $state(false);
   let analyticsErrorMessage = $state<string | null>(null);
   let analyticsSortBy = $state<ChannelPointsSortBy>('lastWatched');
@@ -393,8 +393,8 @@
     authStatus = nextAuthStatus;
     minerStatus = nextMinerStatus;
     summary = nextSummary;
-    streamerActivity = nextStreamerActivity.streamers;
-    recentEvents = nextStreamerActivity.events;
+    activityFeed = nextStreamerActivity.feed;
+    missedTime = nextStreamerActivity.missed;
     await refreshAnalytics();
 
     if (!nextAuthStatus.authenticated) {
@@ -538,7 +538,7 @@
         onControlChange={handleChannelPointsControlChange} />
     </section>
 
-    <ChannelPointsInsightsSection streamers={streamerActivity} events={recentEvents} />
+    <ChannelPointsInsightsSection feed={activityFeed} missed={missedTime} />
   </main>
 
   <footer class="border-t border-border/60">

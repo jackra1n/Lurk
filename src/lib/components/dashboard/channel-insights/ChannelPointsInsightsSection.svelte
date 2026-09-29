@@ -1,21 +1,20 @@
 <script lang="ts">
-  import MostActiveStreamersCard from './MostActiveStreamersCard.svelte';
-  import RecentEventsCard from './RecentEventsCard.svelte';
-  import type { ChannelPointsRecentEventItem, StreamerActivityItem } from '../shared/types';
+  import ActivityFeedCard from './ActivityFeedCard.svelte';
+  import MissedTimeCard from './MissedTimeCard.svelte';
+  import type { ActivityFeedItem, MissedTimeItem } from '../shared/types';
 
   let {
-    streamers = [],
-    events = [],
+    feed = [],
+    missed = [],
     days = 7
   }: {
-    streamers: StreamerActivityItem[];
-    events?: ChannelPointsRecentEventItem[];
+    feed?: ActivityFeedItem[];
+    missed?: MissedTimeItem[];
     days?: number;
   } = $props();
 </script>
 
 <section class="grid gap-4 md:grid-cols-2">
-  <RecentEventsCard {events} />
-
-  <MostActiveStreamersCard {streamers} {days} />
+  <ActivityFeedCard items={feed} />
+  <MissedTimeCard items={missed} {days} />
 </section>

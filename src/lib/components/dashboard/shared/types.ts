@@ -95,35 +95,43 @@ export interface ChannelPointsAnalyticsResponse {
   timeline: ChannelPointSample[];
 }
 
-export interface StreamerActivityItem {
-  login: string;
-  onlineMinutes: number;
-  watchedMinutes: number;
-}
+export type ActivityFeedItem =
+  | {
+      kind: 'watch';
+      id: string;
+      login: string;
+      occurredAtMs: number;
+      durationMs: number;
+      points: number;
+      streak: boolean;
+      ongoing: boolean;
+    }
+  | {
+      kind: 'online';
+      id: string;
+      login: string;
+      occurredAtMs: number;
+      game: string | null;
+    }
+  | {
+      kind: 'offline' | 'claim_failed';
+      id: string;
+      login: string;
+      occurredAtMs: number;
+    };
 
-export type ChannelPointsRecentEventKind =
-  | 'points_watch'
-  | 'points_claim'
-  | 'stream_online'
-  | 'stream_offline'
-  | 'watch_started'
-  | 'watch_stopped'
-  | 'other';
-
-export interface ChannelPointsRecentEventItem {
-  id: string;
+export interface MissedTimeItem {
   login: string;
-  occurredAtMs: number;
-  kind: ChannelPointsRecentEventKind;
-  reasonCode: string | null;
-  pointsDelta: number | null;
+  liveMs: number;
+  watchedMs: number;
+  missedPoints: number | null;
 }
 
 export interface StreamerActivityResponse {
   success: boolean;
   days: number;
-  streamers: StreamerActivityItem[];
-  events: ChannelPointsRecentEventItem[];
+  feed: ActivityFeedItem[];
+  missed: MissedTimeItem[];
 }
 
 export interface WatchingStreamer {

@@ -21,12 +21,14 @@ interface FakeStreamer {
   startedHoursAgo: number;
   hours: number;
   pointsDisabled?: boolean;
+  multiplier?: number;
 }
 
 // Config order is watch priority. Schedules are relative to now, so the same streamers are live in every run.
 const fakeStreamers: FakeStreamer[] = [
   {
     displayName: 'Flumbix',
+    multiplier: 1.2,
     game: 'Just Chatting',
     title: 'morning coffee & chat',
     viewers: 8421,
@@ -54,6 +56,7 @@ const fakeStreamers: FakeStreamer[] = [
   },
   {
     displayName: 'Snarvoo',
+    multiplier: 1.2,
     game: 'Elden Ring',
     title: 'no hit run attempts',
     viewers: 12_400,
@@ -245,8 +248,9 @@ const simulate = () => {
         });
       };
 
-      if (watchedMinutes > 0 && watchedMinutes % 5 === 0) earn('WATCH', 10);
-      if (watchedMinutes % 15 === 7) earn('CLAIM', 50);
+      const multiplier = streamer.multiplier ?? 1;
+      if (watchedMinutes > 0 && watchedMinutes % 5 === 0) earn('WATCH', Math.round(10 * multiplier));
+      if (watchedMinutes % 15 === 7) earn('CLAIM', Math.round(50 * multiplier));
       if (watchedMinutes === 6 && t - stream.fromMs < 15 * minuteMs && stream.streakChance < 0.5) {
         earn('WATCH_STREAK', 450);
       }
@@ -331,7 +335,8 @@ const apiResponses: Record<string, (url: URL) => unknown> = {
     streamerRuntimeStates: streamers.map((streamer) => ({
       login: streamer.login,
       isOnline: onlineLogins.has(streamer.login),
-      isWatched: watchedLogins.has(streamer.login)
+      isWatched: watchedLogins.has(streamer.login),
+      multiplier: streamer.multiplier ?? null
     }))
   }),
   '/api/dashboard/summary': () => ({
@@ -363,7 +368,9 @@ const apiResponses: Record<string, (url: URL) => unknown> = {
         sortDir,
         onlineStreamers: onlineLogins,
         watchedStreamers: watchedLogins,
-        selectedStreamerLogin: url.searchParams.get('selectedStreamer')
+        selectedStreamerLogin: url.searchParams.get('selectedStreamer'),
+        allChannels: url.searchParams.get('scope') === 'all',
+        utcOffsetMinutes: Number(url.searchParams.get('utcOffset') ?? 0)
       })
     };
   }

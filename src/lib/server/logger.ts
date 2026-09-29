@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+// pino must stay a runtime dependency: bundling it resolves its browser build, which lacks multistream.
 import pino from 'pino';
 import pretty from 'pino-pretty';
 import { createStream } from 'rotating-file-stream';

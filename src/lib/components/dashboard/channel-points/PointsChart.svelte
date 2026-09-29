@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { scaleUtc } from 'd3-scale';
   import { curveStepAfter } from 'd3-shape';
   import { Area, AreaChart, LinearGradient } from 'layerchart';
   import type { ChartConfig } from '$lib/components/ui/chart';
@@ -147,7 +146,6 @@
       <AreaChart
         data={chartTimeline}
         x={(item) => new Date(item.timestampMs)}
-        xScale={scaleUtc()}
         yDomain={chartYDomain}
         yBaseline={chartYDomain[0]}
         padding={chartPadding}

@@ -19,7 +19,7 @@ const config = {
   kit: {
     adapter: adapter(),
     version: {
-      name: commit ? `${pkg.version}+${commit}` : pkg.version
+      name: commit ? `${pkg.version} (${commit})` : pkg.version
     }
   }
 };

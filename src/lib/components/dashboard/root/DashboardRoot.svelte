@@ -536,7 +536,7 @@
         <CodeXml class="size-4" />
         Source Code
       </Button>
-      <span class="font-mono text-xs text-muted-foreground">v{version}</span>
+      <span class="font-mono text-xs text-muted-foreground">{version}</span>
     </div>
   </footer>
 </div>

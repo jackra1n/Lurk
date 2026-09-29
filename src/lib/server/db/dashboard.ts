@@ -11,6 +11,8 @@ export type SortDir = 'asc' | 'desc';
 export interface StreamerAnalyticsItem {
   streamerId: number | null;
   login: string;
+  displayName: string | null;
+  profileImageUrl: string | null;
   latestBalance: number;
   pointsEarned: number;
   lastActiveAtMs: number | null;
@@ -130,17 +132,15 @@ export const getChannelPointsAnalytics = ({
   const streamerRows = db
     .select({
       id: streamers.id,
-      login: streamers.login
+      login: streamers.login,
+      displayName: streamers.displayName,
+      profileImageUrl: streamers.profileImageUrl
     })
     .from(streamers)
     .where(inArray(streamers.login, configuredStreamerNames))
     .all();
 
-  const streamerByLogin = new Map(
-    streamerRows
-      .filter((item): item is { id: number; login: string } => typeof item.login === 'string')
-      .map((item) => [item.login, item])
-  );
+  const streamerByLogin = new Map(streamerRows.map((item) => [item.login, item]));
 
   const streamerIds = streamerRows.map((item) => item.id);
   const aggregateRows =
@@ -148,7 +148,7 @@ export const getChannelPointsAnalytics = ({
       ? db
           .select({
             streamerId: channelPointEvents.streamerId,
-            pointsEarned: sql<number>`coalesce(sum(${channelPointEvents.pointsDelta}), 0)`,
+            pointsEarned: sql<number>`coalesce(sum(case when ${channelPointEvents.occurredAtMs} between ${fromMs} and ${toMs} then ${channelPointEvents.pointsDelta} end), 0)`,
             lastOfflineAtMs: sql<
               number | null
             >`max(case when ${channelPointEvents.eventType} = 'stream_down' then ${channelPointEvents.occurredAtMs} end)`,
@@ -182,6 +182,8 @@ export const getChannelPointsAnalytics = ({
     return {
       streamerId: streamer?.id ?? null,
       login: streamerName,
+      displayName: streamer?.displayName ?? null,
+      profileImageUrl: streamer?.profileImageUrl ?? null,
       latestBalance: runtimeBalanceByLogin.has(streamerName) ? Number(runtimeBalance ?? 0) : fallbackBalance,
       pointsEarned: aggregate?.pointsEarned ?? 0,
       lastActiveAtMs: onlineStreamers.has(streamerName) ? requestTimestampMs : (aggregate?.lastOfflineAtMs ?? null),

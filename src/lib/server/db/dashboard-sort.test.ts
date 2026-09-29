@@ -22,6 +22,8 @@ const buildScenario = (rows: ScenarioRow[], priorityOrder = rows.map((row) => ro
   items: rows.map((row, index) => ({
     streamerId: index + 1,
     login: row.login,
+    displayName: null,
+    profileImageUrl: null,
     latestBalance: row.latestBalance,
     pointsEarned: 0,
     lastActiveAtMs: row.lastActiveAtMs,

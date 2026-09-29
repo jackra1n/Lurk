@@ -18,5 +18,5 @@
   {:else}
     <Sun class="size-4" />
   {/if}
-  {isDark ? 'Dark' : 'Light'}
+  <span class="hidden sm:inline">{isDark ? 'Dark' : 'Light'}</span>
 </Button>

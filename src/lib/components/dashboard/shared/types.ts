@@ -17,6 +17,7 @@ export interface MinerStatusResponse {
   running: boolean;
   lifecycle: MinerLifecycle;
   reason: LifecycleReason;
+  startedAtMs: number | null;
   configuredStreamers: string[];
   streamerRuntimeStates: StreamerRuntimeState[];
 }
@@ -123,4 +124,31 @@ export interface StreamerActivityResponse {
   days: number;
   streamers: StreamerActivityItem[];
   events: ChannelPointsRecentEventItem[];
+}
+
+export interface WatchingStreamer {
+  login: string;
+  game: string | null;
+  title: string | null;
+  viewers: number;
+  watchingSinceMs: number | null;
+  points: number;
+  streak: boolean;
+}
+
+export interface EarningsBreakdown {
+  total: number;
+  watch: number;
+  claim: number;
+  streak: number;
+  other: number;
+}
+
+export interface DashboardSummaryResponse {
+  success: boolean;
+  watching: WatchingStreamer[];
+  earnings: {
+    last24h: EarningsBreakdown;
+    dailyAverage: number | null;
+  };
 }

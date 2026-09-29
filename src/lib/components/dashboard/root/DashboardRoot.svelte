@@ -16,6 +16,7 @@
     ChannelPointsControls,
     ChannelPointsRangeSelection,
     ChannelPointsSortBy,
+    DashboardSummaryResponse,
     LifecycleReason,
     MinerLifecycle,
     MinerStatusResponse,
@@ -65,6 +66,7 @@
     running: false,
     lifecycle: 'auth_required',
     reason: 'missing_token',
+    startedAtMs: null,
     configuredStreamers: [],
     streamerRuntimeStates: []
   };
@@ -80,6 +82,7 @@
   let loadingStartAfterAuth = $state(false);
   let loadingMinerAction = $state(false);
   let analytics = $state<ChannelPointsAnalyticsResponse | null>(null);
+  let summary = $state<DashboardSummaryResponse | null>(null);
   let streamerActivity = $state<StreamerActivityItem[]>([]);
   let recentEvents = $state<ChannelPointsRecentEventItem[]>([]);
   let analyticsLoading = $state(false);
@@ -239,6 +242,8 @@
 
     const nextLifecycle = (payload as { lifecycle?: unknown }).lifecycle;
     const nextReason = (payload as { reason?: unknown }).reason;
+    const startedAt = (payload as { startedAt?: unknown }).startedAt;
+    const startedAtMs = typeof startedAt === 'string' ? Date.parse(startedAt) : Number.NaN;
     const configuredStreamers = (payload as { configuredStreamers?: unknown }).configuredStreamers;
     const streamers = (payload as { streamers?: unknown }).streamers;
     const streamerRuntimeStates = (payload as { streamerRuntimeStates?: unknown }).streamerRuntimeStates;
@@ -257,6 +262,7 @@
       running: Boolean((payload as { running?: unknown }).running),
       lifecycle: isLifecycle(nextLifecycle) ? nextLifecycle : 'auth_required',
       reason: isReason(nextReason) ? nextReason : null,
+      startedAtMs: Number.isNaN(startedAtMs) ? null : startedAtMs,
       configuredStreamers: Array.isArray(configuredStreamers)
         ? configuredStreamers.filter((value): value is string => typeof value === 'string')
         : [],
@@ -300,6 +306,17 @@
     }
 
     return payload as ChannelPointsAnalyticsResponse;
+  };
+
+  const fetchSummary = async () => {
+    const response = await fetch('/api/dashboard/summary');
+    const payload = await readJson(response);
+
+    if (!response.ok || !payload || typeof payload !== 'object' || !(payload as { success?: unknown }).success) {
+      throw new Error(getErrorMessage(payload, 'Failed to fetch dashboard summary'));
+    }
+
+    return payload as DashboardSummaryResponse;
   };
 
   const fetchStreamerActivity = async () => {
@@ -366,14 +383,16 @@
   const refreshAllStatus = async (options?: { autoStart?: boolean }) => {
     const autoStart = options?.autoStart ?? true;
     const wasPendingLogin = authStatus.pendingLogin;
-    const [nextAuthStatus, nextMinerStatus, nextStreamerActivity] = await Promise.all([
+    const [nextAuthStatus, nextMinerStatus, nextSummary, nextStreamerActivity] = await Promise.all([
       fetchAuthStatus(),
       fetchMinerStatus(),
+      fetchSummary(),
       fetchStreamerActivity()
     ]);
 
     authStatus = nextAuthStatus;
     minerStatus = nextMinerStatus;
+    summary = nextSummary;
     streamerActivity = nextStreamerActivity.streamers;
     recentEvents = nextStreamerActivity.events;
     await refreshAnalytics();
@@ -493,21 +512,20 @@
   <main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
     <HeaderSection
       {authStatus}
+      {minerStatus}
       {loadingStartAfterAuth}
+      startDisabled={startMinerDisabled}
+      stopDisabled={stopMinerDisabled}
+      actionPhase={quickActionsActionPhase}
       {isDark}
       onAuthStatusChange={refreshStatus}
+      onStart={handleStartMiner}
+      onStop={handleStopMiner}
       onToggleTheme={toggleTheme} />
 
     <DashboardNotice bind:this={dashboardNoticeRef} autoDismissMs={successNoticeAutoDismissMs} />
 
-    <SummaryCardsSection
-      {minerStatus}
-      summary={analytics?.summary ?? null}
-      startDisabled={startMinerDisabled}
-      stopDisabled={stopMinerDisabled}
-      actionPhase={quickActionsActionPhase}
-      onStart={handleStartMiner}
-      onStop={handleStopMiner} />
+    <SummaryCardsSection {minerStatus} {summary} />
 
     <section>
       <PointsOverview

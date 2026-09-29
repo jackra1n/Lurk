@@ -2,7 +2,6 @@ import { fileURLToPath } from 'node:url';
 import { includeIgnoreFile } from '@eslint/compat';
 import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
-import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
@@ -11,8 +10,7 @@ import svelteConfig from './svelte.config.js';
 // bun run lint checks code; bun run lint:fix applies ESLint's available fixes.
 // CI rejects warnings too. Type checking remains in bun run check; these presets
 // lint syntax and Svelte semantics without starting a TypeScript project service.
-// Biome owns formatting. This compatibility preset only disables formatting rules;
-// it does not install or run Prettier, or disable ESLint's correctness checks.
+// Biome owns formatting; these presets contain no formatting rules.
 export default defineConfig(
   includeIgnoreFile(fileURLToPath(new URL('./.gitignore', import.meta.url))),
   js.configs.recommended,
@@ -39,7 +37,5 @@ export default defineConfig(
     files: ['src/lib/components/ui/button/button.svelte'],
     // This anchor primitive accepts external or already-resolved hrefs from its caller.
     rules: { 'svelte/no-navigation-without-resolve': ['error', { ignoreLinks: true }] }
-  },
-  prettier,
-  svelte.configs.prettier
+  }
 );

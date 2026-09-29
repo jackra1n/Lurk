@@ -511,7 +511,8 @@ export class MinerService {
       return configuredStreamers.map((login) => ({
         login,
         isOnline: false,
-        isWatched: false
+        isWatched: false,
+        multiplier: null
       }));
     }
 
@@ -519,10 +520,12 @@ export class MinerService {
 
     return configuredStreamers.map((login) => {
       const state = this.streamerStates.get(login);
+      const bonus = state?.activeMultipliers.reduce((total, multiplier) => total + multiplier.factor, 0) ?? 0;
       return {
         login,
         isOnline: Boolean(state?.isLive),
-        isWatched: watched.has(login)
+        isWatched: watched.has(login),
+        multiplier: bonus > 0 ? Math.round((1 + bonus) * 100) / 100 : null
       };
     });
   }

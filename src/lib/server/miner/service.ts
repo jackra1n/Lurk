@@ -4,7 +4,7 @@ import { twitchAuth } from '$lib/server/auth';
 import { getStreamers } from '$lib/server/config';
 import { getLogger } from '$lib/server/logger';
 import { eventStore } from '$lib/server/db/events';
-import type { StreamerState, StreamerRuntimeState, MinerStatus, MinerStartResult } from './types';
+import type { StreamerState, StreamerRuntimeState, MinerStatus, MinerStartResult, WatchedStream } from './types';
 import { handlePubSubMessage, type EventHandlerDeps, type MessageDedup } from './events';
 import { diffWatchedLogins } from './watch-markers';
 import {
@@ -524,6 +524,16 @@ export class MinerService {
         isOnline: Boolean(state?.isLive),
         isWatched: watched.has(login)
       };
+    });
+  }
+
+  getWatchedStreams(): WatchedStream[] {
+    if (!this.running) return [];
+
+    return getStreamers().flatMap((login) => {
+      const state = this.streamerStates.get(login);
+      if (!state || !this.watchedStreamerNames.has(login)) return [];
+      return [{ login, game: state.stream.game, title: state.stream.title, viewers: state.stream.viewers }];
     });
   }
 

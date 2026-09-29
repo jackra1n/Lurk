@@ -68,6 +68,13 @@ export interface StreamerRuntimeState {
   isWatched: boolean;
 }
 
+export interface WatchedStream {
+  login: string;
+  game: string | null;
+  title: string | null;
+  viewers: number;
+}
+
 export interface MinerStatus {
   starting: boolean;
   running: boolean;

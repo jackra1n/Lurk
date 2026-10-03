@@ -1,6 +1,6 @@
 {
   "name": "lurk",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@eslint/compat": "2.1.1",

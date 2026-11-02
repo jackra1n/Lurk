@@ -116,7 +116,9 @@ export async function syncStreamers(streamerStates: Map<string, StreamerState>):
         stream: createDefaultStreamData()
       });
 
-      if (!channelId) {
+      if (channelId) {
+        subscribeToStreamer(streamerStates.get(name)!);
+      } else {
         logger.debug({ streamer: name }, 'Channel ID lookup unavailable; retrying on next context refresh');
       }
     } else {

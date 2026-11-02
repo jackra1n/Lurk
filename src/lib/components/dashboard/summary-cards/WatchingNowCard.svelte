@@ -40,7 +40,7 @@
   <CardContent class="grid gap-2 sm:grid-cols-2">
     {#if !minerRunning}
       <div
-        class="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border/70 bg-background/30 px-3 text-sm text-muted-foreground sm:col-span-2">
+        class="flex min-h-24 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/70 px-3 text-sm text-muted-foreground sm:col-span-2">
         Miner is stopped
       </div>
     {:else}
@@ -80,7 +80,7 @@
           </div>
         {:else}
           <div
-            class="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border/70 bg-background/30 px-3 text-sm text-muted-foreground">
+            class="flex min-h-24 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/70 px-3 text-sm text-muted-foreground">
             Free slot
           </div>
         {/if}

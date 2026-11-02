@@ -10,7 +10,6 @@ import { diffWatchedLogins } from './watch-markers';
 import {
   syncStreamers,
   subscribeToPointsTopic,
-  subscribeToStreamer,
   checkStreamerOnline,
   isMetadataCheckDue,
   invalidateStreamMetadata,
@@ -238,12 +237,6 @@ export class MinerService {
       }
       subscribeToPointsTopic(this.userId);
 
-      for (const [, state] of this.streamerStates) {
-        if (state.channelId) {
-          subscribeToStreamer(state);
-        }
-      }
-
       if (!this.running || generation !== this.metadataLoopGeneration) {
         throw new Error('Miner startup interrupted');
       }
@@ -282,6 +275,15 @@ export class MinerService {
       reason: 'started',
       message: 'Miner started'
     });
+  }
+
+  async syncConfiguredStreamers(): Promise<void> {
+    if (!this.running) return;
+    const known = new Set(this.streamerStates.keys());
+    await syncStreamers(this.streamerStates);
+    for (const [name, state] of this.streamerStates) {
+      if (!known.has(name)) await processStreamer(this.streamerStates, state);
+    }
   }
 
   stop(): void {

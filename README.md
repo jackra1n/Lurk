@@ -9,7 +9,7 @@ This project is inspired by [Twitch-Channel-Points-Miner-v2](https://github.com/
 
 ## Configuration
 
-Set your tracked streamers in `data/config.json` before starting Lurk.
+Manage your tracked streamers and their priority with the **Streamers** button on the dashboard. Lurk saves them to `data/config.json`, which you can also edit by hand while Lurk is stopped.
 
 ```bash
 mkdir -p data
@@ -29,7 +29,7 @@ Example:
 }
 ```
 
-- `streamers`: Twitch streamers to track.
+- `streamers`: Twitch streamers to track. When more are live than Lurk can watch, the ones listed first win.
 - `autoStartMiner`: if `true`, miner tries to start automatically on boot.
 
 ## Quick Start

@@ -82,10 +82,14 @@
   };
 </script>
 
-<Button variant="outline" size="sm" onclick={openDialog}>
+<button
+  type="button"
+  class="inline-flex h-8 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+  onclick={openDialog}
+  aria-label="Manage streamers">
   <Users class="size-3.5" />
-  Streamers
-</Button>
+  <span class="hidden sm:inline">Streamers</span>
+</button>
 
 <Dialog.Root bind:open>
   <Dialog.Content class="sm:max-w-md">

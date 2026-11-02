@@ -2,6 +2,7 @@
   import BrandTitle from './BrandTitle.svelte';
   import AuthStatusControl from './AuthStatusControl.svelte';
   import MinerStatusControl from './MinerStatusControl.svelte';
+  import StreamerSettingsDialog from './StreamerSettingsDialog.svelte';
   import ThemeSwitch from './ThemeSwitch.svelte';
   import type { AuthStatusResponse, MinerStatusResponse } from '../shared/types';
 
@@ -16,7 +17,9 @@
     onAuthStatusChange,
     onStart,
     onStop,
-    onToggleTheme
+    onToggleTheme,
+    streamerProfileImages,
+    onStreamersSaved
   }: {
     authStatus: AuthStatusResponse;
     minerStatus: MinerStatusResponse;
@@ -29,6 +32,8 @@
     onStart?: () => void | Promise<void>;
     onStop?: () => void | Promise<void>;
     onToggleTheme: () => void;
+    streamerProfileImages: ReadonlyMap<string, string | null>;
+    onStreamersSaved: () => void | Promise<void>;
   } = $props();
 </script>
 
@@ -36,6 +41,10 @@
   <BrandTitle />
   <div class="flex items-center gap-2">
     <MinerStatusControl {minerStatus} {startDisabled} {stopDisabled} {actionPhase} {onStart} {onStop} />
+    <StreamerSettingsDialog
+      streamers={minerStatus.configuredStreamers}
+      profileImages={streamerProfileImages}
+      onSaved={onStreamersSaved} />
     <AuthStatusControl {authStatus} {loadingStartAfterAuth} {onAuthStatusChange} />
     <ThemeSwitch {isDark} onToggle={onToggleTheme} />
   </div>

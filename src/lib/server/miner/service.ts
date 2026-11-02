@@ -10,7 +10,6 @@ import { diffWatchedLogins } from './watch-markers';
 import {
   syncStreamers,
   subscribeToPointsTopic,
-  subscribeToStreamer,
   checkStreamerOnline,
   isMetadataCheckDue,
   invalidateStreamMetadata,
@@ -237,12 +236,6 @@ export class MinerService {
         throw new Error('Miner startup interrupted');
       }
       subscribeToPointsTopic(this.userId);
-
-      for (const [, state] of this.streamerStates) {
-        if (state.channelId) {
-          subscribeToStreamer(state);
-        }
-      }
 
       if (!this.running || generation !== this.metadataLoopGeneration) {
         throw new Error('Miner startup interrupted');

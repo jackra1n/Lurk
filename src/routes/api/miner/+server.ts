@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { minerService, type MinerStartReason } from '$lib/server/miner';
-import { addStreamer, removeStreamer, getStreamers } from '$lib/server/config';
+import { getStreamers, setStreamers } from '$lib/server/config';
+import { parseStreamerLogin } from '$lib/streamers';
 import { twitchAuth } from '$lib/server/auth';
 
 type MinerLifecycle = 'starting' | 'running' | 'ready' | 'auth_required' | 'authenticating' | 'error';
@@ -86,19 +87,19 @@ export const POST: RequestHandler = async ({ request }) => {
       minerService.stop();
       return json({ success: true, message: 'Miner stopped' });
 
-    case 'addStreamer':
-      if (typeof value !== 'string' || !value) {
-        return json({ success: false, message: 'Streamer name is required' }, { status: 400 });
+    case 'setStreamers': {
+      if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+        return json({ success: false, message: 'Streamers must be a list of names' }, { status: 400 });
       }
-      addStreamer(value);
-      return json({ success: true, message: `Added streamer: ${value}` });
-
-    case 'removeStreamer':
-      if (typeof value !== 'string' || !value) {
-        return json({ success: false, message: 'Streamer name is required' }, { status: 400 });
+      const invalid = value.filter((entry: string) => !parseStreamerLogin(entry));
+      if (invalid.length > 0) {
+        return json({ success: false, message: `Invalid streamer names: ${invalid.join(', ')}` }, { status: 400 });
       }
-      removeStreamer(value);
-      return json({ success: true, message: `Removed streamer: ${value}` });
+      const streamers = [...new Set(value.map((entry: string) => parseStreamerLogin(entry)!))];
+      setStreamers(streamers);
+      await minerService.syncConfiguredStreamers();
+      return json({ success: true, message: 'Streamers saved', streamers });
+    }
 
     default:
       return json({ success: false, message: 'Unknown action' }, { status: 400 });

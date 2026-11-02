@@ -51,17 +51,8 @@ export function getAutoStartMiner(): boolean {
   return config.autoStartMiner;
 }
 
-export function addStreamer(name: string): void {
-  const normalized = name.toLowerCase();
-  if (!config.streamers.includes(normalized)) {
-    config.streamers.push(normalized);
-    saveConfig(config);
-  }
-}
-
-export function removeStreamer(name: string): void {
-  const normalized = name.toLowerCase();
-  config.streamers = config.streamers.filter((s) => s !== normalized);
+export function setStreamers(streamers: string[]): void {
+  config = { ...config, streamers };
   saveConfig(config);
 }
 

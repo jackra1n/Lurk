@@ -277,6 +277,15 @@ export class MinerService {
     });
   }
 
+  async syncConfiguredStreamers(): Promise<void> {
+    if (!this.running) return;
+    const known = new Set(this.streamerStates.keys());
+    await syncStreamers(this.streamerStates);
+    for (const [name, state] of this.streamerStates) {
+      if (!known.has(name)) await processStreamer(this.streamerStates, state);
+    }
+  }
+
   stop(): void {
     if (!this.running) {
       logger.info('Not running');

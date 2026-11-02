@@ -483,6 +483,11 @@
     }
   };
 
+  const handleStreamersSaved = async () => {
+    setSuccessNotice('Streamers saved.');
+    await Promise.all([refreshStatus(), refreshAnalytics()]);
+  };
+
   const handleChannelPointsControlChange = async (change: ChannelPointsControlChange) => {
     if (change.type === 'sortBy') {
       if (analyticsSortBy === change.value) return;
@@ -553,7 +558,9 @@
         controls={analyticsControls}
         streamerRuntimeStates={minerStatus.streamerRuntimeStates}
         minerRunning={minerStatus.running}
-        onControlChange={handleChannelPointsControlChange} />
+        configuredStreamers={minerStatus.configuredStreamers}
+        onControlChange={handleChannelPointsControlChange}
+        onStreamersSaved={handleStreamersSaved} />
     </section>
 
     <ChannelPointsInsightsSection feed={activityFeed} missed={missedTime} />

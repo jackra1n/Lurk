@@ -7,6 +7,7 @@
   import EarningsChart from './EarningsChart.svelte';
   import PointsChart from './PointsChart.svelte';
   import StreamerList from './StreamerList.svelte';
+  import StreamerSettingsDialog from './StreamerSettingsDialog.svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
   import * as Tooltip from '$lib/components/ui/tooltip';
@@ -24,7 +25,9 @@
     controls,
     streamerRuntimeStates = [],
     minerRunning = false,
-    onControlChange
+    configuredStreamers = [],
+    onControlChange,
+    onStreamersSaved
   }: {
     analytics: ChannelPointsAnalyticsResponse | null;
     loading?: boolean;
@@ -32,7 +35,9 @@
     controls: ChannelPointsControls;
     streamerRuntimeStates?: StreamerRuntimeState[];
     minerRunning?: boolean;
+    configuredStreamers?: string[];
     onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
+    onStreamersSaved: () => void | Promise<void>;
   } = $props();
 
   const selectedStreamer = $derived(
@@ -46,6 +51,9 @@
   );
   const totalBalance = $derived(
     analytics?.streamers.reduce((total, streamer) => total + streamer.latestBalance, 0) ?? 0
+  );
+  const profileImages = $derived(
+    new Map(analytics?.streamers.map((streamer) => [streamer.login, streamer.profileImageUrl]) ?? [])
   );
   const channelPointsDisabledTooltip =
     'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
@@ -105,6 +113,7 @@
             Updating...
           </span>
         {/if}
+        <StreamerSettingsDialog streamers={configuredStreamers} {profileImages} onSaved={onStreamersSaved} />
         <DateRangePicker
           rangeFromMs={controls.rangeFromMs}
           rangeToMs={controls.rangeToMs}

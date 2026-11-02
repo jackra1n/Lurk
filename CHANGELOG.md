@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/jackra1n/Lurk/compare/1.3.0...1.4.0) (2026-11-02)
+
+
+### Features
+
+* add streamer management functionality ([#24](https://github.com/jackra1n/Lurk/issues/24)) ([1f7b37a](https://github.com/jackra1n/Lurk/commit/1f7b37ae91644cc39fc13cb803d0f4a3075b315b))
+
 ## [1.3.0](https://github.com/jackra1n/Lurk/compare/1.2.0...1.3.0) (2026-09-29)
 
 

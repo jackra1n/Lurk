@@ -7,7 +7,10 @@
   import EarningsChart from './EarningsChart.svelte';
   import PointsChart from './PointsChart.svelte';
   import StreamerList from './StreamerList.svelte';
+  import StreamerSettingsDialog from './StreamerSettingsDialog.svelte';
+  import Plus from '@lucide/svelte/icons/plus';
   import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
   import * as Tooltip from '$lib/components/ui/tooltip';
   import type {
@@ -24,7 +27,9 @@
     controls,
     streamerRuntimeStates = [],
     minerRunning = false,
-    onControlChange
+    configuredStreamers = [],
+    onControlChange,
+    onStreamersSaved
   }: {
     analytics: ChannelPointsAnalyticsResponse | null;
     loading?: boolean;
@@ -32,8 +37,12 @@
     controls: ChannelPointsControls;
     streamerRuntimeStates?: StreamerRuntimeState[];
     minerRunning?: boolean;
+    configuredStreamers?: string[];
     onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
+    onStreamersSaved: () => void | Promise<void>;
   } = $props();
+
+  let streamerSettingsDialog = $state<ReturnType<typeof StreamerSettingsDialog>>();
 
   const selectedStreamer = $derived(
     analytics?.streamers.find((streamer) => streamer.login === analytics.selectedStreamerLogin) ?? null
@@ -46,6 +55,9 @@
   );
   const totalBalance = $derived(
     analytics?.streamers.reduce((total, streamer) => total + streamer.latestBalance, 0) ?? 0
+  );
+  const profileImages = $derived(
+    new Map(analytics?.streamers.map((streamer) => [streamer.login, streamer.profileImageUrl]) ?? [])
   );
   const channelPointsDisabledTooltip =
     'This streamer has disabled channel points. Lurk will not use watch slots here until points are enabled again.';
@@ -129,10 +141,14 @@
         Loading channel points...
       </p>
     {:else if !analytics || analytics.streamers.length === 0}
-      <p
-        class="rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-8 text-center text-sm text-muted-foreground">
+      <div
+        class="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/70 bg-background/70 px-3 py-8 text-center text-sm text-muted-foreground">
         No tracked streamers yet.
-      </p>
+        <Button variant="outline" size="sm" onclick={() => streamerSettingsDialog?.show()}>
+          <Plus />
+          Add streamers
+        </Button>
+      </div>
     {:else}
       <div class="grid gap-3 lg:grid-cols-[240px_1fr]">
         <StreamerList
@@ -141,7 +157,8 @@
           {controls}
           {streamerRuntimeStates}
           {minerRunning}
-          {onControlChange} />
+          {onControlChange}
+          onManageStreamers={() => streamerSettingsDialog?.show()} />
         {#if analytics.earnings}
           <EarningsChart earnings={analytics.earnings} />
         {:else}
@@ -155,3 +172,9 @@
     {/if}
   </CardContent>
 </Card>
+
+<StreamerSettingsDialog
+  bind:this={streamerSettingsDialog}
+  streamers={configuredStreamers}
+  {profileImages}
+  onSaved={onStreamersSaved} />

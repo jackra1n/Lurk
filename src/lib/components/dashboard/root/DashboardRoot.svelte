@@ -483,10 +483,6 @@
     }
   };
 
-  const streamerProfileImages = $derived(
-    new Map(analytics?.streamers.map((streamer) => [streamer.login, streamer.profileImageUrl]) ?? [])
-  );
-
   const handleStreamersSaved = async () => {
     setSuccessNotice('Streamers saved.');
     await Promise.all([refreshStatus(), refreshAnalytics()]);
@@ -548,9 +544,7 @@
       onAuthStatusChange={refreshStatus}
       onStart={handleStartMiner}
       onStop={handleStopMiner}
-      onToggleTheme={toggleTheme}
-      {streamerProfileImages}
-      onStreamersSaved={handleStreamersSaved} />
+      onToggleTheme={toggleTheme} />
 
     <DashboardNotice bind:this={dashboardNoticeRef} autoDismissMs={successNoticeAutoDismissMs} />
 
@@ -564,7 +558,9 @@
         controls={analyticsControls}
         streamerRuntimeStates={minerStatus.streamerRuntimeStates}
         minerRunning={minerStatus.running}
-        onControlChange={handleChannelPointsControlChange} />
+        configuredStreamers={minerStatus.configuredStreamers}
+        onControlChange={handleChannelPointsControlChange}
+        onStreamersSaved={handleStreamersSaved} />
     </section>
 
     <ChannelPointsInsightsSection feed={activityFeed} missed={missedTime} />

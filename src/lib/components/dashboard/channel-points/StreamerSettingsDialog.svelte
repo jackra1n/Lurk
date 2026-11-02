@@ -4,7 +4,6 @@
   import GripVertical from '@lucide/svelte/icons/grip-vertical';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Plus from '@lucide/svelte/icons/plus';
-  import Users from '@lucide/svelte/icons/users';
   import X from '@lucide/svelte/icons/x';
   import { Button } from '$lib/components/ui/button';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -31,7 +30,7 @@
 
   const changed = $derived(draft.join() !== streamers.join());
 
-  const openDialog = () => {
+  export const show = () => {
     draft = [...streamers];
     input = '';
     error = null;
@@ -81,15 +80,6 @@
     }
   };
 </script>
-
-<button
-  type="button"
-  class="inline-flex h-8 items-center gap-2 rounded-full border border-border/70 bg-background/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-  onclick={openDialog}
-  aria-label="Manage streamers">
-  <Users class="size-3.5" />
-  <span class="hidden sm:inline">Streamers</span>
-</button>
 
 <Dialog.Root bind:open>
   <Dialog.Content class="sm:max-w-md">

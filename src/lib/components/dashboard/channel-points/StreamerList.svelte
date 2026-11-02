@@ -4,7 +4,9 @@
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Layers from '@lucide/svelte/icons/layers';
+  import Pencil from '@lucide/svelte/icons/pencil';
   import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '$lib/components/ui/button';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import * as Select from '$lib/components/ui/select';
   import * as Tooltip from '$lib/components/ui/tooltip';
@@ -24,7 +26,8 @@
     controls,
     streamerRuntimeStates = [],
     minerRunning = false,
-    onControlChange
+    onControlChange,
+    onManageStreamers
   }: {
     streamers: StreamerAnalyticsItem[];
     selectedStreamerLogin: string | null;
@@ -32,6 +35,7 @@
     streamerRuntimeStates?: StreamerRuntimeState[];
     minerRunning?: boolean;
     onControlChange: (change: ChannelPointsControlChange) => void | Promise<void>;
+    onManageStreamers: () => void;
   } = $props();
 
   const sortOptions: ChannelPointsSortBy[] = ['lastActive', 'lastWatched', 'name', 'points', 'priority'];
@@ -96,37 +100,49 @@
 </script>
 
 <div class="space-y-2">
-  <Select.Root
-    type="single"
-    value={controls.sortBy}
-    onValueChange={(value) => {
-			if (value === controls.sortBy) return;
-			onControlChange({ type: 'sortBy', value: value as ChannelPointsSortBy });
-		}}>
-    <Select.Trigger size="sm" class="w-full">
-      <span data-slot="select-value">
-        {#if controls.sortDir === 'asc'}
-          <ArrowUp class="size-3.5" />
-        {:else}
-          <ArrowDown class="size-3.5" />
-        {/if}
-        {sortLabels[controls.sortBy]}
-      </span>
-    </Select.Trigger>
-    <Select.Content>
-      {#each sortOptions as key (key)}
-        <Select.Item
-          value={key}
-          label={sortLabels[key]}
-          onpointerdown={() => {
-						if (key !== controls.sortBy) return;
-						onControlChange({ type: 'toggleSortDir' });
-					}}>
-          {sortLabels[key]}
-        </Select.Item>
-      {/each}
-    </Select.Content>
-  </Select.Root>
+  <div class="flex gap-2">
+    <Select.Root
+      type="single"
+      value={controls.sortBy}
+      onValueChange={(value) => {
+  			if (value === controls.sortBy) return;
+  			onControlChange({ type: 'sortBy', value: value as ChannelPointsSortBy });
+  		}}>
+      <Select.Trigger size="sm" class="min-w-0 flex-1">
+        <span data-slot="select-value">
+          {#if controls.sortDir === 'asc'}
+            <ArrowUp class="size-3.5" />
+          {:else}
+            <ArrowDown class="size-3.5" />
+          {/if}
+          {sortLabels[controls.sortBy]}
+        </span>
+      </Select.Trigger>
+      <Select.Content>
+        {#each sortOptions as key (key)}
+          <Select.Item
+            value={key}
+            label={sortLabels[key]}
+            onpointerdown={() => {
+  						if (key !== controls.sortBy) return;
+  						onControlChange({ type: 'toggleSortDir' });
+  					}}>
+            {sortLabels[key]}
+          </Select.Item>
+        {/each}
+      </Select.Content>
+    </Select.Root>
+    <Tooltip.Root>
+      <Tooltip.Trigger aria-label="Manage streamers">
+        {#snippet child({ props })}
+          <Button {...props} variant="outline" size="icon-sm" onclick={onManageStreamers}>
+            <Pencil />
+          </Button>
+        {/snippet}
+      </Tooltip.Trigger>
+      <Tooltip.Content side="top" sideOffset={8}>Manage streamers</Tooltip.Content>
+    </Tooltip.Root>
+  </div>
 
   <button
     type="button"

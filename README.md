@@ -9,7 +9,7 @@ This project is inspired by [Twitch-Channel-Points-Miner-v2](https://github.com/
 
 ## Configuration
 
-Manage your tracked streamers and their priority with the **Streamers** button on the dashboard. Lurk saves them to `data/config.json`, which you can also edit by hand while Lurk is stopped.
+Manage your tracked streamers and their priority with the edit button above the streamer list on the dashboard. Lurk saves them to `data/config.json`, which you can also edit by hand while Lurk is stopped.
 
 ```bash
 mkdir -p data

@@ -86,7 +86,7 @@
         {/snippet}
       </BarChart>
     </ChartContainer>
-    <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 pb-4 text-xs text-muted-foreground">
+    <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-muted-foreground">
       {#each visibleSources as source (source.key)}
         <span class="inline-flex items-center gap-1.5">
           <span class={`size-2.5 rounded-[2px] ${source.swatch}`}></span>

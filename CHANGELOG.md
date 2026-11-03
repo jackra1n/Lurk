@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/jackra1n/Lurk/compare/1.4.0...1.4.1) (2026-11-03)
+
+
+### CI/CD
+
+* update github actions to latest major versions ([67384e0](https://github.com/jackra1n/Lurk/commit/67384e090be2c1a1aebab7bb6c42d0fb8b4a0982))
+
 ## [1.4.0](https://github.com/jackra1n/Lurk/compare/1.3.0...1.4.0) (2026-11-02)
 
 
